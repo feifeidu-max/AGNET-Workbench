@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "hermesAgent": {
+    "version": "0.18.2",
+    "license": "MIT",
+    "upstream": "https://github.com/NousResearch/hermes-agent"
+  },
+  "hermesStudio": {
+    "packageVersion": "0.6.30",
+    "commit": "5be8548",
+    "license": "BSL-1.1",
+    "upstream": "https://github.com/EKKOLearnAI/hermes-studio"
+  },
+  "llmWiki": {
+    "version": "0.6.4",
+    "tag": "v0.6.4",
+    "commit": "03e46fc4",
+    "license": "GPL-3.0-only",
+    "upstream": "https://github.com/nashsu/llm_wiki"
+  }
+}

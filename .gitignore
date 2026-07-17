@@ -1,0 +1,8 @@
+# Local operator configuration and runtime artifacts
+ops/config.local.psd1
+ops/logs/
+ops/*.pid
+ops/*.partial
+ops/.test-runtime-*/
+.runtime/
+.tools/
