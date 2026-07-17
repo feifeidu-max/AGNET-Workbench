@@ -20,6 +20,7 @@ import ModelSettings from "@/components/hermes/settings/ModelSettings.vue";
 import AccountSettings from "@/components/hermes/settings/AccountSettings.vue";
 import UserManagementSettings from "@/components/hermes/settings/UserManagementSettings.vue";
 import VoiceSettings from "@/components/hermes/settings/VoiceSettings.vue";
+import SenseNovaSettings from "@/components/hermes/settings/SenseNovaSettings.vue";
 import { isStoredSuperAdmin } from "@/api/client";
 import { useProfilesStore } from "@/stores/hermes/profiles";
 
@@ -118,6 +119,7 @@ onMounted(() => {
             <PrivacySettings />
           </NTabPane>
           <NTabPane name="models" :tab="t('settings.tabs.models')">
+            <SenseNovaSettings />
             <ModelSettings />
           </NTabPane>
           <NTabPane name="voice" :tab="t('settings.tabs.voice')">

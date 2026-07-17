@@ -51,6 +51,7 @@ import { petRoutes } from './hermes/pets'
 import { companyMetricsRoutes } from './company-metrics'
 import { knowledgeRoutes } from './knowledge'
 import { workbenchRoutes } from './workbench'
+import { sensenovaRoutes } from './hermes/sensenova'
 
 /**
  * Register all routes on the Koa app.
@@ -116,4 +117,5 @@ export function registerRoutes(app: any, authMiddleware: Array<(ctx: Context, ne
   app.use(companyMetricsRoutes.routes())
   app.use(knowledgeRoutes.routes())
   app.use(workbenchRoutes.routes())
+  app.use(sensenovaRoutes.routes())
 }
