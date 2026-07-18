@@ -125,16 +125,20 @@ pub async fn list_file_history(
     project_path: String,
     file_path: String,
 ) -> Result<Vec<FileHistoryEntry>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let (root, file) = checked_file(&project_path, &file_path)?;
-        let raw =
-            fs::read_to_string(history_path(&root, &file)).unwrap_or_else(|_| "[]".to_string());
-        let mut entries: Vec<FileHistoryEntry> = serde_json::from_str(&raw).unwrap_or_default();
-        entries.reverse();
-        Ok(entries)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || list_file_history_inner(&project_path, &file_path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+pub(crate) fn list_file_history_inner(
+    project_path: &str,
+    file_path: &str,
+) -> Result<Vec<FileHistoryEntry>, String> {
+    let (root, file) = checked_file(project_path, file_path)?;
+    let raw = fs::read_to_string(history_path(&root, &file)).unwrap_or_else(|_| "[]".to_string());
+    let mut entries: Vec<FileHistoryEntry> = serde_json::from_str(&raw).unwrap_or_default();
+    entries.reverse();
+    Ok(entries)
 }
 
 #[tauri::command]
@@ -144,20 +148,27 @@ pub async fn restore_file_history(
     entry_id: String,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let (root, file) = checked_file(&project_path, &file_path)?;
-        let raw = fs::read_to_string(history_path(&root, &file)).map_err(|e| e.to_string())?;
-        let entries: Vec<FileHistoryEntry> =
-            serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-        let entry = entries
-            .into_iter()
-            .find(|entry| entry.id == entry_id)
-            .ok_or_else(|| "History entry not found".to_string())?;
-        fs::write(&file, &entry.content).map_err(|e| e.to_string())?;
-        record_file_version(&file, "human", "history.restore");
-        Ok(entry.content)
+        restore_file_history_inner(&project_path, &file_path, &entry_id)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+pub(crate) fn restore_file_history_inner(
+    project_path: &str,
+    file_path: &str,
+    entry_id: &str,
+) -> Result<String, String> {
+    let (root, file) = checked_file(project_path, file_path)?;
+    let raw = fs::read_to_string(history_path(&root, &file)).map_err(|e| e.to_string())?;
+    let entries: Vec<FileHistoryEntry> = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let entry = entries
+        .into_iter()
+        .find(|entry| entry.id == entry_id)
+        .ok_or_else(|| "History entry not found".to_string())?;
+    fs::write(&file, &entry.content).map_err(|e| e.to_string())?;
+    record_file_version(&file, "human", "history.restore");
+    Ok(entry.content)
 }
 
 #[cfg(test)]

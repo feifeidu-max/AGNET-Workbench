@@ -229,7 +229,7 @@ pub async fn rebuild_wiki_index(project_path: String) -> Result<RebuildIndexResu
         .map_err(|error| format!("Index rebuild task failed: {error}"))?
 }
 
-fn rebuild_wiki_index_inner(project_path: String) -> Result<RebuildIndexResult, String> {
+pub(crate) fn rebuild_wiki_index_inner(project_path: String) -> Result<RebuildIndexResult, String> {
     let wiki = PathBuf::from(project_path).join("wiki");
     let mut groups: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
     for entry in WalkDir::new(&wiki).follow_links(false) {

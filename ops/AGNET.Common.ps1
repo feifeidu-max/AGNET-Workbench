@@ -119,12 +119,32 @@ function Get-AGNETMetricsDbPath {
     return Join-Path (Get-AGNETStudioDataHome -Config $Config) "company-metrics.sqlite"
 }
 
+function Get-AGNETManagedWikiProjectsRoot {
+    param([hashtable]$Config)
+    if (-not [string]::IsNullOrWhiteSpace([string]$Config.LlmWikiManagedProjectsHome)) {
+        return Expand-AGNETPath -Path ([string]$Config.LlmWikiManagedProjectsHome)
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$env:APPDATA)) {
+        return [IO.Path]::GetFullPath((Join-Path $env:APPDATA "com.llmwiki.app\studio-projects"))
+    }
+    return [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE ".llm-wiki\studio-projects"))
+}
+
 function Get-AGNETWikiProjectPaths {
     param([hashtable]$Config)
     $paths = @()
     foreach ($path in @($Config.WikiProjectPaths)) {
         if (-not [string]::IsNullOrWhiteSpace([string]$path)) {
             $paths += Expand-AGNETPath -Path ([string]$path)
+        }
+    }
+    $managedRoot = Get-AGNETManagedWikiProjectsRoot -Config $Config
+    if (Test-Path -LiteralPath $managedRoot -PathType Container) {
+        foreach ($project in @(Get-ChildItem -LiteralPath $managedRoot -Directory -Force | Sort-Object Name)) {
+            if ((Test-Path -LiteralPath (Join-Path $project.FullName "schema.md") -PathType Leaf) -and
+                (Test-Path -LiteralPath (Join-Path $project.FullName "wiki") -PathType Container)) {
+                $paths += [IO.Path]::GetFullPath($project.FullName)
+            }
         }
     }
     return @($paths | Select-Object -Unique)

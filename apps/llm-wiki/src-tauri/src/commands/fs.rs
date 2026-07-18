@@ -1172,7 +1172,9 @@ pub async fn apply_text_selection_edit(
     .map_err(|err| format!("apply_text_selection_edit blocking task join error: {err}"))?
 }
 
-fn create_missing_wiki_page_inner(
+/// Shared by the Studio-only local API so a browser caller gets the same
+/// filename validation and create-new semantics as the desktop UI.
+pub(crate) fn create_missing_wiki_page_inner(
     project_path: &str,
     title: &str,
     content: Option<&str>,

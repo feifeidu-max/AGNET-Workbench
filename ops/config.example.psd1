@@ -22,6 +22,9 @@
     WikiProjectPaths     = @(
         "%USERPROFILE%\Documents\LLM-Wiki"
     )
+    # Projects created from the Studio LLM Wiki workbench are stored here.
+    # They are discovered automatically for startup registration and backup.
+    LlmWikiManagedProjectsHome = "%APPDATA%\com.llmwiki.app\studio-projects"
 
     BackupRoot           = "D:\AGNET-Backups"
     RetentionCount       = 30

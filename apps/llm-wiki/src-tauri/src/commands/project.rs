@@ -13,7 +13,7 @@ pub fn create_project(name: String, path: String) -> Result<WikiProject, String>
     run_guarded("create_project", || create_project_impl(name, path))
 }
 
-fn create_project_impl(name: String, path: String) -> Result<WikiProject, String> {
+pub(crate) fn create_project_impl(name: String, path: String) -> Result<WikiProject, String> {
     let root = Path::new(&path).join(&name);
 
     if root.exists() {

@@ -150,7 +150,10 @@ pub async fn get_page_links(
 /// file tree. Canonical paths enforce the project/wiki boundary, while the
 /// returned paths stay project-relative so all desktop platforms share one
 /// wire format and Windows separators never leak into frontend routing.
-fn get_page_links_inner(project_path: &str, file_path: &str) -> Result<PageLinksResponse, String> {
+pub(crate) fn get_page_links_inner(
+    project_path: &str,
+    file_path: &str,
+) -> Result<PageLinksResponse, String> {
     let project = fs::canonicalize(project_path)
         .map_err(|err| format!("Failed to resolve project path: {err}"))?;
     let file =

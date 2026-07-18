@@ -101,8 +101,10 @@ try {
     $wikiPort = [int]$config.LlmWikiPort
     $hermesHome = Get-AGNETHermesHome -Config $config
     $studioHome = Get-AGNETStudioDataHome -Config $config
+    $managedWikiProjectsRoot = Get-AGNETManagedWikiProjectsRoot -Config $config
     New-Item -ItemType Directory -Path $hermesHome -Force | Out-Null
     New-Item -ItemType Directory -Path $studioHome -Force | Out-Null
+    New-Item -ItemType Directory -Path $managedWikiProjectsRoot -Force | Out-Null
 
     # These values are inherited by child processes. Do not print them.
     $env:LLM_WIKI_API_TOKEN = $wikiToken
@@ -111,6 +113,7 @@ try {
     $env:LLM_WIKI_API_BASE_URL = "http://127.0.0.1:$wikiPort"
     $env:LLM_WIKI_MCP_TOOLSET = "research"
     $env:LLM_WIKI_HEADLESS = "1"
+    $env:LLM_WIKI_MANAGED_PROJECTS_DIR = $managedWikiProjectsRoot
     # The Studio-managed service has no Wiki WebView worker. Keep compilation
     # in the backend queue so PDF uploads continue through review headlessly.
     $env:LLM_WIKI_NATIVE_COMPILE = "0"

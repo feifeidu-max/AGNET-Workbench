@@ -179,6 +179,42 @@ struct TrustedSource {
     year: Option<i32>,
 }
 
+/// Browser-facing source metadata. Keep project-internal paths out of this
+/// shape; Studio opens a PDF through the protected source-id endpoint instead.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustedSourceSummary {
+    pub source_id: String,
+    pub filename: String,
+    pub source_kind: String,
+    pub page_paths: Vec<String>,
+    pub revision: u32,
+    pub trusted_at: String,
+    pub title: Option<String>,
+    pub authors: Vec<String>,
+    pub year: Option<i32>,
+}
+
+pub fn list_trusted_sources(project_path: &str) -> Result<Vec<TrustedSourceSummary>, GateError> {
+    let _guard = gate_lock()?;
+    let trusted: Vec<TrustedSource> =
+        read_json_or_default(&state_path(project_path, TRUSTED_FILE)?)?;
+    Ok(trusted
+        .into_iter()
+        .map(|source| TrustedSourceSummary {
+            source_id: source.source_id,
+            filename: source.filename,
+            source_kind: source.source_kind,
+            page_paths: source.page_paths,
+            revision: source.revision,
+            trusted_at: source.trusted_at,
+            title: source.title,
+            authors: source.authors,
+            year: source.year,
+        })
+        .collect())
+}
+
 #[derive(Debug, Clone)]
 struct PaperMetadata {
     title: String,

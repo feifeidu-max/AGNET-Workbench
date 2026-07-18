@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -23,6 +23,7 @@ const MAX_BODY_BYTES: usize = 1024 * 1024;
 const MAX_CHAT_BODY_BYTES: usize = 40 * 1024 * 1024;
 const MAX_PDF_BODY_BYTES: usize = crate::ingest_gate::MAX_PDF_BYTES;
 const MAX_FILE_CONTENT_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_FILE_EDIT_BODY_BYTES: usize = MAX_FILE_CONTENT_BYTES as usize + 128 * 1024;
 const DEFAULT_MAX_FILES: usize = 2_000;
 const HARD_MAX_FILES: usize = 10_000;
 const DEFAULT_MAX_REVIEWS: usize = 200;
@@ -255,6 +256,7 @@ fn handle_request(
                 "chat": true,
                 "streaming": false,
             },
+            "clipServerStatus": clip_server::get_daemon_status().to_string(),
         }));
     }
     if !path.starts_with(API_PREFIX) {
@@ -288,12 +290,31 @@ fn handle_request(
 
     match (method, parts.as_slice()) {
         (&Method::Get, ["projects"]) => handle_projects(app),
+        (&Method::Post, ["projects"]) => handle_create_managed_project(app, body_text),
         (&Method::Post, ["projects", "current", "select"]) => {
             handle_select_current_project(app, body_text)
         }
         (&Method::Get, ["projects", project_id, "files"]) => handle_files(app, project_id, query),
         (&Method::Get, ["projects", project_id, "files", "content"]) => {
             handle_file_content(app, project_id, query)
+        }
+        (&Method::Get, ["projects", project_id, "files", "history"]) => {
+            handle_file_history(app, project_id, query)
+        }
+        (&Method::Get, ["projects", project_id, "files", "links"]) => {
+            handle_page_links(app, project_id, query)
+        }
+        (&Method::Post, ["projects", project_id, "files", "write"]) => {
+            handle_write_file(app, project_id, body_text)
+        }
+        (&Method::Post, ["projects", project_id, "files", "create-missing"]) => {
+            handle_create_missing_page(app, project_id, body_text)
+        }
+        (&Method::Post, ["projects", project_id, "files", "restore"]) => {
+            handle_restore_file_history(app, project_id, body_text)
+        }
+        (&Method::Post, ["projects", project_id, "files", "delete"]) => {
+            handle_delete_file(app, project_id, body_text)
         }
         (&Method::Get, ["projects", project_id, "reviews"]) => {
             handle_reviews(app, project_id, query)
@@ -311,6 +332,19 @@ fn handle_request(
         (&Method::Post, ["projects", project_id, "sources", "rescan"]) => {
             handle_rescan(app, project_id)
         }
+        (&Method::Get, ["projects", project_id, "sources"]) => handle_sources(app, project_id),
+        (&Method::Get, ["projects", project_id, "skills"]) => handle_skills(app, project_id),
+        (&Method::Get, ["projects", project_id, "settings"]) => handle_settings(app, project_id),
+        (&Method::Get, ["projects", project_id, "lint"]) => handle_lint(app, project_id),
+        (&Method::Post, ["projects", project_id, "maintenance", "rebuild-index"]) => {
+            handle_rebuild_index(app, project_id)
+        }
+        (&Method::Get, ["projects", project_id, "chat", "sessions"]) => {
+            handle_chat_sessions(app, project_id)
+        }
+        (&Method::Get, ["projects", project_id, "chat", "sessions", session_id]) => {
+            handle_chat_session(app, project_id, session_id)
+        }
         (&Method::Post, ["projects", project_id, "chat"]) => {
             handle_chat(app, project_id, body_text)
         }
@@ -322,6 +356,9 @@ fn handle_request(
         }
         (&Method::Post, ["projects", project_id, "ingest-drafts"]) => {
             handle_create_ingest_draft(app, project_id, body, headers)
+        }
+        (&Method::Post, ["projects", project_id, "generated-drafts"]) => {
+            handle_create_generated_draft(app, project_id, body_text)
         }
         (&Method::Get, ["projects", project_id, "ingest-drafts", draft_id]) => {
             handle_ingest_draft_detail(app, project_id, draft_id)
@@ -402,6 +439,15 @@ fn body_limit_for_request(method: &Method, url: &str) -> usize {
         && matches!(parts.as_slice(), ["projects", _, "ingest-drafts"])
     {
         MAX_PDF_BODY_BYTES
+    } else if method == &Method::Post
+        && matches!(
+            parts.as_slice(),
+            ["projects", _, "files", "write"]
+                | ["projects", _, "files", "create-missing"]
+                | ["projects", _, "generated-drafts"]
+        )
+    {
+        MAX_FILE_EDIT_BODY_BYTES
     } else {
         MAX_BODY_BYTES
     }
@@ -929,6 +975,182 @@ fn handle_select_current_project(app: &AppHandle, body: &str) -> ApiResponse {
     ok(json!({ "ok": true, "project": project }))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateManagedProjectRequest {
+    name: String,
+}
+
+/// Studio may create projects, but never opens an arbitrary browser-supplied
+/// filesystem path. Keeping new projects under the application's managed data
+/// directory is both predictable for backup and keeps the local API from
+/// becoming a generic file creation surface.
+fn handle_create_managed_project(app: &AppHandle, body: &str) -> ApiResponse {
+    let request: CreateManagedProjectRequest = match serde_json::from_str(body) {
+        Ok(request) => request,
+        Err(error) => return err(400, format!("Invalid project request: {error}")),
+    };
+    let name = match safe_managed_project_name(&request.name) {
+        Ok(name) => name,
+        Err(error) => return err(400, error),
+    };
+    let base = match managed_projects_dir(app) {
+        Ok(path) => path,
+        Err(error) => return err(500, error),
+    };
+    if let Err(error) = fs::create_dir_all(&base) {
+        return err(
+            500,
+            format!("Failed to create managed project directory: {error}"),
+        );
+    }
+    let project = match commands::project::create_project_impl(
+        name.clone(),
+        base.to_string_lossy().into_owned(),
+    ) {
+        Ok(project) => project,
+        Err(error) => return err(409, error),
+    };
+    let project_path = normalize_path(&project.path);
+    let project_id = Uuid::new_v4().to_string();
+    let project_state_dir = Path::new(&project_path).join(".llm-wiki");
+    if let Err(error) = fs::create_dir_all(&project_state_dir) {
+        return err(500, format!("Failed to initialize project state: {error}"));
+    }
+    if let Err(error) = write_atomic_file(
+        &project_state_dir.join("project.json"),
+        serde_json::to_vec_pretty(&json!({ "id": project_id, "createdAt": now_ms() }))
+            .unwrap_or_default()
+            .as_slice(),
+    ) {
+        return err(500, format!("Failed to write project identity: {error}"));
+    }
+    if let Err(error) = clip_server::set_current_project(&project_path) {
+        return err(500, error);
+    }
+
+    let mut state = load_app_state(app).unwrap_or_else(|| json!({}));
+    if !state.is_object() {
+        state = json!({});
+    }
+    let state_object = state.as_object_mut().expect("object checked above");
+    let registry = state_object
+        .entry("projectRegistry".to_string())
+        .or_insert_with(|| json!({}));
+    if !registry.is_object() {
+        *registry = json!({});
+    }
+    registry
+        .as_object_mut()
+        .expect("object initialized")
+        .insert(
+            project_id.clone(),
+            json!({
+                "id": project_id,
+                "name": name,
+                "path": project_path,
+                "lastOpened": now_ms(),
+            }),
+        );
+    state_object.insert(
+        "lastProject".to_string(),
+        json!({ "name": project.name, "path": project.path }),
+    );
+    let recent = state_object
+        .entry("recentProjects".to_string())
+        .or_insert_with(|| json!([]));
+    if !recent.is_array() {
+        *recent = json!([]);
+    }
+    let recents = recent.as_array_mut().expect("array initialized");
+    recents.retain(|entry| {
+        entry
+            .get("path")
+            .and_then(Value::as_str)
+            .map(|path| !project_path_matches(path, &project_path))
+            .unwrap_or(false)
+    });
+    recents.insert(0, json!({ "name": project.name, "path": project.path }));
+    recents.truncate(10);
+    if let Err(error) = write_app_state(app, &state) {
+        return err(500, error);
+    }
+    invalidate_config_cache();
+    ok(json!({
+        "ok": true,
+        "project": { "id": project_id, "name": project.name, "current": true },
+    }))
+}
+
+fn managed_projects_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(configured) = std::env::var("LLM_WIKI_MANAGED_PROJECTS_DIR")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        let path = PathBuf::from(configured);
+        if !path.is_absolute() {
+            return Err("LLM_WIKI_MANAGED_PROJECTS_DIR must be an absolute path".to_string());
+        }
+        return Ok(path);
+    }
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join("studio-projects"))
+        .map_err(|error| format!("Failed to resolve managed project directory: {error}"))
+}
+
+fn safe_managed_project_name(raw: &str) -> Result<String, String> {
+    let name = raw.trim();
+    if name.is_empty() || name.chars().count() > 80 {
+        return Err("Project name must contain 1 to 80 characters".to_string());
+    }
+    if name.starts_with('.') || name.ends_with('.') || name.ends_with(' ') {
+        return Err("Project name cannot begin or end with a dot or space".to_string());
+    }
+    if name.chars().any(|character| {
+        character.is_control()
+            || matches!(
+                character,
+                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+            )
+    }) {
+        return Err("Project name contains unsupported filename characters".to_string());
+    }
+    let device = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    if matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (device.len() == 4
+            && (device.starts_with("COM") || device.starts_with("LPT"))
+            && device.as_bytes()[3].is_ascii_digit()
+            && device.as_bytes()[3] != b'0')
+    {
+        return Err("Project name is reserved by Windows".to_string());
+    }
+    Ok(name.to_string())
+}
+
+fn now_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0)
+}
+
+fn write_app_state(app: &AppHandle, value: &Value) -> Result<(), String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app state directory: {error}"))?
+        .join("app-state.json");
+    let bytes = serde_json::to_vec_pretty(value)
+        .map_err(|error| format!("Failed to serialize app state: {error}"))?;
+    write_atomic_file(&path, &bytes)
+}
+
 fn load_projects(app: &AppHandle) -> Vec<ProjectEntry> {
     let current = normalize_path(&clip_server::current_project_path());
     let mut by_path: BTreeMap<String, ProjectEntry> = BTreeMap::new();
@@ -1119,6 +1341,42 @@ fn handle_create_ingest_draft(
                 "draft": draft,
             }),
         },
+        Err(error) => gate_error(error),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeneratedDraftRequest {
+    title: String,
+    target_path: String,
+    content: String,
+}
+
+/// Deep Research results may become Wiki pages only by entering the same
+/// staged review queue used for PDFs. The browser never supplies the origin
+/// label and cannot direct this endpoint at a non-Wiki path.
+fn handle_create_generated_draft(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let request: GeneratedDraftRequest = match serde_json::from_str(body) {
+        Ok(request) => request,
+        Err(error) => return err(400, format!("Invalid generated draft request: {error}")),
+    };
+    let target_path = match editable_wiki_rel(&request.target_path) {
+        Ok(path) => path,
+        Err(error) => return err(403, error),
+    };
+    match crate::ingest_gate::create_generated_page_draft(
+        &project.path,
+        &request.title,
+        &target_path,
+        &request.content,
+        "Studio Deep Research",
+    ) {
+        Ok(draft) => ok(json!({ "ok": true, "projectId": project.id, "draft": draft })),
         Err(error) => gate_error(error),
     }
 }
@@ -1325,6 +1583,21 @@ fn handle_dismiss_reading_candidate(
     }
 }
 
+fn handle_sources(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    match crate::ingest_gate::list_trusted_sources(&project.path) {
+        Ok(sources) => ok(json!({
+            "ok": true,
+            "projectId": project.id,
+            "sources": sources,
+        })),
+        Err(error) => gate_error(error),
+    }
+}
+
 fn handle_files(app: &AppHandle, project_id: &str, query: &str) -> ApiResponse {
     let project = match resolve_project(app, project_id) {
         Ok(project) => project,
@@ -1411,9 +1684,332 @@ fn handle_file_content(app: &AppHandle, project_id: &str, query: &str) -> ApiRes
             "projectId": project.id,
             "path": rel,
             "content": content,
+            "revision": file_revision(&meta),
         })),
         Err(_) => err(415, "File is not valid UTF-8 text"),
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileWriteRequest {
+    path: String,
+    content: String,
+    #[serde(default)]
+    if_match: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FilePathRequest {
+    path: String,
+    #[serde(default)]
+    if_match: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RestoreFileRequest {
+    path: String,
+    entry_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateMissingPageRequest {
+    title: String,
+    #[serde(default)]
+    content: Option<String>,
+}
+
+fn editable_wiki_rel(raw: &str) -> Result<String, String> {
+    let rel = normalize_path(raw).trim_start_matches('/').to_string();
+    let lower = rel.to_ascii_lowercase();
+    if !is_public_project_rel(&rel)
+        || !lower.starts_with("wiki/")
+        || !matches!(
+            Path::new(&lower)
+                .extension()
+                .and_then(|value| value.to_str()),
+            Some("md") | Some("mdx")
+        )
+    {
+        return Err("Only Markdown pages under wiki/ can be changed from Studio".to_string());
+    }
+    Ok(rel)
+}
+
+fn protected_wiki_page(rel: &str) -> bool {
+    matches!(
+        normalize_path(rel).to_ascii_lowercase().as_str(),
+        "wiki/index.md" | "wiki/log.md" | "wiki/overview.md"
+    )
+}
+
+fn file_revision(metadata: &fs::Metadata) -> String {
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| value.as_nanos())
+        .unwrap_or(0);
+    format!("{modified}:{}", metadata.len())
+}
+
+fn matches_if_match(expected: Option<&str>, metadata: &fs::Metadata) -> bool {
+    expected
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value == file_revision(metadata))
+        .unwrap_or(true)
+}
+
+fn handle_write_file(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let request: FileWriteRequest = match serde_json::from_str(body) {
+        Ok(request) => request,
+        Err(error) => return err(400, format!("Invalid file write request: {error}")),
+    };
+    let rel = match editable_wiki_rel(&request.path) {
+        Ok(rel) => rel,
+        Err(error) => return err(403, error),
+    };
+    if request.content.len() > MAX_FILE_CONTENT_BYTES as usize {
+        return err(413, "Wiki page content exceeds the 2 MB limit");
+    }
+    let path = match safe_join(&project.path, &rel) {
+        Ok(path) => path,
+        Err(error) => return err(400, error),
+    };
+    if path.exists() {
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) if metadata.is_file() => metadata,
+            Ok(_) => return err(409, "Wiki target is not a regular file"),
+            Err(error) => return err(500, format!("Failed to inspect wiki target: {error}")),
+        };
+        if !matches_if_match(request.if_match.as_deref(), &metadata) {
+            return err(409, "Wiki page changed elsewhere; reload before saving");
+        }
+        commands::file_history::record_file_version(&path, "baseline", "before.studio.api.write");
+    } else if request
+        .if_match
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        return err(409, "Wiki page no longer exists; reload before saving");
+    }
+    if let Err(error) = write_atomic_file(&path, request.content.as_bytes()) {
+        return err(500, error);
+    }
+    commands::file_history::record_file_version(&path, "human", "studio.api.write");
+    let revision = fs::metadata(&path)
+        .map(|metadata| file_revision(&metadata))
+        .unwrap_or_default();
+    ok(json!({ "ok": true, "projectId": project.id, "path": rel, "revision": revision }))
+}
+
+fn handle_create_missing_page(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let request: CreateMissingPageRequest = match serde_json::from_str(body) {
+        Ok(request) => request,
+        Err(error) => return err(400, format!("Invalid missing-page request: {error}")),
+    };
+    let rel = match commands::fs::create_missing_wiki_page_inner(
+        &project.path,
+        &request.title,
+        request.content.as_deref(),
+    ) {
+        Ok(path) => path,
+        Err(error) => return err(400, error),
+    };
+    let path = match safe_join(&project.path, &rel) {
+        Ok(path) => path,
+        Err(error) => return err(500, error),
+    };
+    let content = fs::read_to_string(&path).unwrap_or_default();
+    let revision = fs::metadata(&path)
+        .map(|metadata| file_revision(&metadata))
+        .unwrap_or_default();
+    ok(json!({
+        "ok": true,
+        "projectId": project.id,
+        "path": rel,
+        "content": content,
+        "revision": revision,
+    }))
+}
+
+fn handle_file_history(app: &AppHandle, project_id: &str, query: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let params = parse_query(query);
+    let Some(raw_path) = params.get("path") else {
+        return err(400, "Missing path query parameter");
+    };
+    if !is_public_project_rel(raw_path) || !is_text_content_rel(raw_path) {
+        return err(403, "Path is not available for Studio file history");
+    }
+    let rel = normalize_path(raw_path).trim_start_matches('/').to_string();
+    let path = match safe_join(&project.path, &rel) {
+        Ok(path) => path,
+        Err(error) => return err(400, error),
+    };
+    let entries = match commands::file_history::list_file_history_inner(
+        &project.path,
+        &path.to_string_lossy(),
+    ) {
+        Ok(entries) => entries,
+        Err(error) => return err(400, error),
+    };
+    let entries = entries
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "id": entry.id,
+                "timestamp": entry.timestamp,
+                "author": entry.author,
+                "tool": entry.tool,
+                "content": entry.content,
+            })
+        })
+        .collect::<Vec<_>>();
+    ok(json!({ "ok": true, "projectId": project.id, "path": rel, "entries": entries }))
+}
+
+fn handle_restore_file_history(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let request: RestoreFileRequest = match serde_json::from_str(body) {
+        Ok(request) => request,
+        Err(error) => return err(400, format!("Invalid history restore request: {error}")),
+    };
+    let rel = match editable_wiki_rel(&request.path) {
+        Ok(rel) => rel,
+        Err(error) => return err(403, error),
+    };
+    let path = match safe_join(&project.path, &rel) {
+        Ok(path) => path,
+        Err(error) => return err(400, error),
+    };
+    let content = match commands::file_history::restore_file_history_inner(
+        &project.path,
+        &path.to_string_lossy(),
+        &request.entry_id,
+    ) {
+        Ok(content) => content,
+        Err(error) => return err(400, error),
+    };
+    let revision = fs::metadata(&path)
+        .map(|metadata| file_revision(&metadata))
+        .unwrap_or_default();
+    ok(json!({
+        "ok": true,
+        "projectId": project.id,
+        "path": rel,
+        "content": content,
+        "revision": revision,
+    }))
+}
+
+fn handle_delete_file(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let request: FilePathRequest = match serde_json::from_str(body) {
+        Ok(request) => request,
+        Err(error) => return err(400, format!("Invalid file delete request: {error}")),
+    };
+    let rel = match editable_wiki_rel(&request.path) {
+        Ok(rel) => rel,
+        Err(error) => return err(403, error),
+    };
+    if protected_wiki_page(&rel) {
+        return err(409, "Core Wiki pages cannot be deleted from Studio");
+    }
+    let path = match safe_join(&project.path, &rel) {
+        Ok(path) => path,
+        Err(error) => return err(400, error),
+    };
+    let metadata = match fs::metadata(&path) {
+        Ok(metadata) if metadata.is_file() => metadata,
+        Ok(_) => return err(409, "Wiki target is not a regular file"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return err(404, "Wiki page was not found")
+        }
+        Err(error) => return err(500, format!("Failed to inspect wiki page: {error}")),
+    };
+    if !matches_if_match(request.if_match.as_deref(), &metadata) {
+        return err(409, "Wiki page changed elsewhere; reload before deleting");
+    }
+    commands::file_history::record_file_version(&path, "baseline", "before.studio.api.delete");
+    if let Err(error) = fs::remove_file(&path) {
+        return err(500, format!("Failed to delete wiki page: {error}"));
+    }
+    ok(json!({ "ok": true, "projectId": project.id, "path": rel }))
+}
+
+fn handle_page_links(app: &AppHandle, project_id: &str, query: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let params = parse_query(query);
+    let Some(raw_path) = params.get("path") else {
+        return err(400, "Missing path query parameter");
+    };
+    let rel = match editable_wiki_rel(raw_path) {
+        Ok(rel) => rel,
+        Err(error) => return err(403, error),
+    };
+    let path = match safe_join(&project.path, &rel) {
+        Ok(path) => path,
+        Err(error) => return err(400, error),
+    };
+    match commands::search::get_page_links_inner(&project.path, &path.to_string_lossy()) {
+        Ok(links) => {
+            ok(json!({ "ok": true, "projectId": project.id, "path": rel, "links": links }))
+        }
+        Err(error) => err(400, error),
+    }
+}
+
+fn write_atomic_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Target path has no parent directory".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Failed to create parent directory: {error}"))?;
+    let filename = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("llm-wiki-file");
+    let temporary = parent.join(format!(".{filename}.{}.tmp", Uuid::new_v4()));
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .map_err(|error| format!("Failed to create temporary file: {error}"))?;
+    if let Err(error) = output.write_all(bytes).and_then(|_| output.sync_all()) {
+        drop(output);
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("Failed to write temporary file: {error}"));
+    }
+    drop(output);
+    fs::rename(&temporary, path).map_err(|error| {
+        let _ = fs::remove_file(&temporary);
+        format!("Failed to replace file atomically: {error}")
+    })
 }
 
 fn safe_join(project_path: &str, rel: &str) -> Result<PathBuf, String> {
@@ -2396,6 +2992,239 @@ fn handle_cancel_chat(app: &AppHandle, project_id: &str, session_id: &str) -> Ap
             .cancel(&project.id, session_id, None),
         "sessionId": session_id,
     }))
+}
+
+fn handle_chat_sessions(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let sessions = app
+        .state::<agent::session::AgentSessionStore>()
+        .list_sessions(&project.path)
+        .into_iter()
+        .map(|session| {
+            let title = session
+                .messages
+                .iter()
+                .find(|message| message.role == "user")
+                .map(|message| compact_session_title(&message.content))
+                .unwrap_or_else(|| "New conversation".to_string());
+            json!({
+                "id": session.session_id,
+                "title": title,
+                "updatedAt": session.updated_at,
+                "messageCount": session.messages.len(),
+            })
+        })
+        .collect::<Vec<_>>();
+    ok(json!({ "ok": true, "projectId": project.id, "sessions": sessions }))
+}
+
+fn handle_chat_session(app: &AppHandle, project_id: &str, raw_session_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let session_id = percent_decode(raw_session_id);
+    let session = app
+        .state::<agent::session::AgentSessionStore>()
+        .list_sessions(&project.path)
+        .into_iter()
+        .find(|session| session.session_id == session_id);
+    let Some(session) = session else {
+        return err(404, "Conversation was not found");
+    };
+    let messages = session
+        .messages
+        .into_iter()
+        .map(|message| {
+            json!({
+                "role": message.role,
+                "content": message.content,
+                "timestamp": message.timestamp,
+            })
+        })
+        .collect::<Vec<_>>();
+    ok(json!({
+        "ok": true,
+        "projectId": project.id,
+        "session": {
+            "id": session.session_id,
+            "updatedAt": session.updated_at,
+            "messages": messages,
+        },
+    }))
+}
+
+fn compact_session_title(content: &str) -> String {
+    let compact = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut title = compact.chars().take(60).collect::<String>();
+    if compact.chars().count() > 60 {
+        title.push_str("...");
+    }
+    if title.is_empty() {
+        "New conversation".to_string()
+    } else {
+        title
+    }
+}
+
+fn handle_skills(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let skills = agent::skills::agent_list_skills(project.path.clone());
+    ok(json!({ "ok": true, "projectId": project.id, "skills": skills }))
+}
+
+fn handle_settings(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let source_watch = load_source_watch_config(app, &project.id)
+        .and_then(|config| serde_json::to_value(config).ok())
+        .unwrap_or_else(|| json!({}));
+    let source_watch = json!({
+        "enabled": source_watch.get("enabled").and_then(Value::as_bool).unwrap_or(false),
+        "autoIngest": source_watch.get("autoIngest").and_then(Value::as_bool).unwrap_or(false),
+        "maxFileSizeMb": source_watch.get("maxFileSizeMb").and_then(Value::as_u64).unwrap_or(0),
+    });
+    let runtime = load_agent_runtime_config(app);
+    let llm_configured = runtime
+        .llm
+        .as_ref()
+        .is_some_and(agent::provider::LlmConfig::is_usable_for_backend_http);
+    ok(json!({
+        "ok": true,
+        "projectId": project.id,
+        "retrievalMode": if commands::search::keyword_only_mode() { "keyword_graph" } else { "default" },
+        "embeddingEnabled": !commands::search::keyword_only_mode(),
+        "llmConfigured": llm_configured,
+        "clipServerStatus": clip_server::get_daemon_status().to_string(),
+        "sourceWatch": source_watch,
+        "api": {
+            "loopbackOnly": !api_allow_lan_access(app),
+            "tokenConfigured": api_token(app).is_some(),
+            "mcpEnabled": api_mcp_enabled(app),
+        },
+    }))
+}
+
+fn handle_lint(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    match lint_project_wiki(&project.path) {
+        Ok((pages, issues)) => ok(json!({
+            "ok": true,
+            "projectId": project.id,
+            "pages": pages,
+            "issues": issues,
+        })),
+        Err(error) => err(500, error),
+    }
+}
+
+fn lint_project_wiki(project_path: &str) -> Result<(usize, Vec<Value>), String> {
+    let wiki = safe_join(project_path, "wiki")?;
+    if !wiki.is_dir() {
+        return Ok((0, Vec::new()));
+    }
+    let mut pages = Vec::<(String, String)>::new();
+    let mut ids = BTreeSet::new();
+    for entry in WalkDir::new(&wiki)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        if !entry.file_type().is_file()
+            || entry.path().extension().and_then(|value| value.to_str()) != Some("md")
+        {
+            continue;
+        }
+        let content = match fs::read_to_string(entry.path()) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        let rel = relative_to_project(project_path, entry.path());
+        let id = entry
+            .path()
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_string();
+        if !id.is_empty() {
+            ids.insert(id);
+        }
+        pages.push((rel, content));
+    }
+    let mut issues = Vec::new();
+    for (path, content) in &pages {
+        let frontmatter = content
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split_once("\n---"));
+        let Some((frontmatter, _)) = frontmatter else {
+            issues.push(json!({
+                "id": format!("frontmatter:{path}"),
+                "path": path,
+                "severity": "warning",
+                "message": "Page has no YAML frontmatter",
+            }));
+            continue;
+        };
+        let has_type = frontmatter
+            .lines()
+            .any(|line| line.trim_start().starts_with("type:"));
+        let has_title = frontmatter.lines().any(|line| {
+            line.trim_start()
+                .strip_prefix("title:")
+                .is_some_and(|value| !value.trim().trim_matches(['\"', '\'']).is_empty())
+        });
+        if !has_type {
+            issues.push(json!({
+                "id": format!("type:{path}"),
+                "path": path,
+                "severity": "warning",
+                "message": "Page frontmatter has no type",
+            }));
+        }
+        if !has_title {
+            issues.push(json!({
+                "id": format!("title:{path}"),
+                "path": path,
+                "severity": "warning",
+                "message": "Page frontmatter has no title",
+            }));
+        }
+        for link in extract_wikilinks(content) {
+            if resolve_link(&link, &ids).is_none() {
+                issues.push(json!({
+                    "id": format!("link:{path}:{link}"),
+                    "path": path,
+                    "severity": "info",
+                    "message": format!("Missing wiki link: [[{link}]]"),
+                    "missingTitle": link,
+                }));
+            }
+        }
+    }
+    issues.truncate(1_000);
+    Ok((pages.len(), issues))
+}
+
+fn handle_rebuild_index(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    match commands::project_maintenance::rebuild_wiki_index_inner(project.path.clone()) {
+        Ok(result) => ok(json!({ "ok": true, "projectId": project.id, "result": result })),
+        Err(error) => err(500, error),
+    }
 }
 
 fn load_embedding_config(app: &AppHandle) -> Option<commands::search::SearchEmbeddingConfig> {
