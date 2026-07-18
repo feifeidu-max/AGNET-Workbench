@@ -155,7 +155,12 @@ function countWikiPages(nodes: unknown): number {
     if (!item || typeof item !== 'object') continue
     const node = item as Record<string, unknown>
     if (node.isDir === true) count += countWikiPages(node.children)
-    else if (typeof node.path === 'string' && node.path.endsWith('.md')) count += 1
+    else if (typeof node.path === 'string') {
+      const path = node.path.replace(/\\/g, '/').toLowerCase()
+      // The root wiki also contains index/log/overview system pages. The
+      // workbench metric is the number of trusted paper pages only.
+      if (path.endsWith('.md') && (path.includes('/wiki/papers/') || path.includes('/papers/'))) count += 1
+    }
   }
   return count
 }

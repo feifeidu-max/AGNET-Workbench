@@ -3,16 +3,13 @@
     # recommended for Task Scheduler installations.
     NodeExecutable       = ""
     HermesExecutable     = "hermes"
-    OllamaExecutable     = "ollama"
     LlmWikiExecutable    = ""
     # Empty uses apps\llm-wiki\mcp-server\dist\src\index.js from this repo.
     LlmWikiMcpEntrypoint = ""
 
     StudioPort           = 8648
     LlmWikiPort          = 19828
-    OllamaPort           = 11434
     HermesGatewayPort    = 8642
-    EmbeddingModel       = "bge-m3"
 
     # Empty HermesHome uses the same Windows discovery order as Studio:
     # %LOCALAPPDATA%\hermes, %APPDATA%\hermes, then %USERPROFILE%\.hermes.

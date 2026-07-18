@@ -238,6 +238,11 @@ fn handle_request(
             "mcpEnabled": api_mcp_enabled(app),
             "allowUnauthenticated": api_allow_unauthenticated(app),
             "allowLanAccess": api_allow_lan_access(app),
+            "retrievalMode": if commands::search::keyword_only_mode() {
+                "keyword_graph"
+            } else {
+                "default"
+            },
             "agent": {
                 "chat": true,
                 "streaming": false,
@@ -2542,12 +2547,19 @@ fn extract_wikilinks(content: &str) -> Vec<String> {
 }
 
 fn resolve_link(raw: &str, ids: &BTreeSet<String>) -> Option<String> {
+    let raw = raw.trim().trim_matches('/');
     if ids.contains(raw) {
         return Some(raw.to_string());
     }
-    let normalized = raw.to_lowercase().replace(' ', "-");
+
+    // Wiki links may include a project-relative directory (for example
+    // `papers/foo`) and an optional Markdown extension, while graph node IDs
+    // are file stems. Resolve the final path component before comparing IDs.
+    let path_name = raw.rsplit(['/', '\\']).next().unwrap_or(raw);
+    let path_name = path_name.strip_suffix(".md").unwrap_or(path_name);
+    let normalized = path_name.to_lowercase().replace(' ', "-");
     ids.iter()
-        .find(|id| id.to_lowercase() == normalized || id.to_lowercase() == raw.to_lowercase())
+        .find(|id| id.to_lowercase() == normalized || id.to_lowercase() == path_name.to_lowercase())
         .cloned()
 }
 

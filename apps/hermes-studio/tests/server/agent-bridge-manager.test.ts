@@ -92,6 +92,35 @@ describe('agent bridge manager command resolution', () => {
     expect(command.agentRoot).toBe(agentRoot)
   })
 
+  it('prefers the pinned Windows virtual environment over an older Hermes home runtime', async () => {
+    const venvRoot = join(tempDir, 'hermes-0.18.2')
+    const binDir = join(venvRoot, 'Scripts')
+    const agentRoot = join(venvRoot, 'Lib', 'site-packages')
+    const homeDir = join(tempDir, 'home')
+    const staleAgentRoot = join(homeDir, 'hermes-agent')
+    const fakePython = join(binDir, 'python.exe')
+    const fakeHermes = join(binDir, 'hermes.exe')
+    mkdirSync(binDir, { recursive: true })
+    mkdirSync(agentRoot, { recursive: true })
+    mkdirSync(staleAgentRoot, { recursive: true })
+    writeFileSync(join(agentRoot, 'run_agent.py'), '')
+    writeFileSync(join(staleAgentRoot, 'run_agent.py'), '')
+    writeFileSync(fakePython, '')
+    writeFileSync(fakeHermes, '')
+    process.env.HERMES_HOME = homeDir
+    process.env.HERMES_BIN = fakeHermes
+
+    const { resolveAgentBridgeCommand } = await import('../../packages/server/src/services/hermes/agent-bridge/manager')
+    const command = resolveAgentBridgeCommand()
+
+    expect(command).toEqual({
+      command: fakePython,
+      argsPrefix: [],
+      agentRoot,
+      hermesHome: homeDir,
+    })
+  })
+
   it('falls back to system Python instead of uv when no source root exists', async () => {
     const homeDir = join(tempDir, 'home')
     const fakePython = join(tempDir, 'python3')
@@ -147,8 +176,13 @@ describe('agent bridge manager command resolution', () => {
   it('uses an isolated default bridge endpoint while running under Vitest', async () => {
     const { DEFAULT_AGENT_BRIDGE_ENDPOINT } = await import('../../packages/server/src/services/hermes/agent-bridge/client')
 
-    expect(DEFAULT_AGENT_BRIDGE_ENDPOINT).toContain(`hermes-agent-bridge-test-${process.pid}`)
-    expect(DEFAULT_AGENT_BRIDGE_ENDPOINT).not.toBe('ipc:///tmp/hermes-agent-bridge.sock')
+    if (process.platform === 'win32') {
+      expect(DEFAULT_AGENT_BRIDGE_ENDPOINT).toBe(`tcp://127.0.0.1:${28000 + (process.pid % 10000)}`)
+      expect(DEFAULT_AGENT_BRIDGE_ENDPOINT).not.toBe('tcp://127.0.0.1:18765')
+    } else {
+      expect(DEFAULT_AGENT_BRIDGE_ENDPOINT).toContain(`hermes-agent-bridge-test-${process.pid}`)
+      expect(DEFAULT_AGENT_BRIDGE_ENDPOINT).not.toBe('ipc:///tmp/hermes-agent-bridge.sock')
+    }
   })
 
   it('honors the bridge connect retry environment override', async () => {

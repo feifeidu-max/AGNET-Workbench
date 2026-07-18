@@ -4,8 +4,8 @@
 
 - Hermes Agent `0.18.2`：通用对话与长期记忆运行时。
 - Hermes Studio `5be8548`：统一 Web 工作台，访问地址为 `http://127.0.0.1:8648`。
-- LLM Wiki `v0.6.4` / `03e46fc4`：独立 GPL-3.0 进程，负责论文知识库与审核门。
-- Ollama：仅运行 `bge-m3` embedding，不运行生成模型。
+- LLM Wiki `v0.6.4` / `03e46fc4`：独立 GPL-3.0 进程，负责论文知识库、关键词检索与知识图谱。
+- 检索模式：关键词检索 + 知识图谱扩展，不安装或启动 Ollama，不生成向量。
 
 公司指标使用独立 SQLite、确定性规则和模板报告，不注册为 MCP，也不进入 Hermes 或公网 LLM 上下文。
 
@@ -30,7 +30,7 @@ docs/DELIVERY-STATUS.md     当前交付、运行与验收状态
 .\Start-AGNET.cmd
 ```
 
-启动器严格按 Ollama -> LLM Wiki -> Hermes Studio 的顺序等待健康检查，通过后才打开浏览器。三个 HTTP 服务均必须只监听 `127.0.0.1`，否则启动失败。
+启动器严格按 LLM Wiki -> Hermes Studio 的顺序等待健康检查，通过后才打开浏览器。所有 HTTP 服务均必须只监听 `127.0.0.1`，否则启动失败。
 
 日常备份与开机自启：
 

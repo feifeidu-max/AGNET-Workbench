@@ -9,7 +9,6 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 . (Join-Path $PSScriptRoot "AGNET.Common.ps1")
 
-$ollamaProcess = $null
 $llmWikiProcess = $null
 $studioStarted = $false
 $node = $null
@@ -54,8 +53,6 @@ try {
     )
     $node = Resolve-AGNETCommand -Name "node" -ConfiguredPath ([string]$config.NodeExecutable) -FallbackPaths $nodeFallbacks
     $hermes = Resolve-AGNETCommand -Name "hermes" -ConfiguredPath ([string]$config.HermesExecutable)
-    $ollama = Resolve-AGNETCommand -Name "ollama" -ConfiguredPath ([string]$config.OllamaExecutable)
-
     if (-not (Test-Path -LiteralPath $studioCli -PathType Leaf)) {
         throw "Hermes Studio CLI entry is missing: $studioCli"
     }
@@ -98,7 +95,6 @@ try {
 
     $studioPort = [int]$config.StudioPort
     $wikiPort = [int]$config.LlmWikiPort
-    $ollamaPort = [int]$config.OllamaPort
     $hermesHome = Get-AGNETHermesHome -Config $config
     $studioHome = Get-AGNETStudioDataHome -Config $config
     New-Item -ItemType Directory -Path $hermesHome -Force | Out-Null
@@ -111,7 +107,9 @@ try {
     $env:LLM_WIKI_API_BASE_URL = "http://127.0.0.1:$wikiPort"
     $env:LLM_WIKI_MCP_TOOLSET = "research"
     $env:LLM_WIKI_NATIVE_COMPILE = "1"
-    $env:OLLAMA_HOST = "127.0.0.1:$ollamaPort"
+    # AGNET deliberately uses LLM Wiki's keyword search plus graph expansion.
+    # This prevents stale embedding settings from attempting an embedding call.
+    $env:LLM_WIKI_RETRIEVAL_MODE = "keyword_graph"
     $env:BIND_HOST = "127.0.0.1"
     $env:PORT = [string]$studioPort
     $env:CORS_ORIGINS = "http://127.0.0.1:$studioPort,http://localhost:$studioPort"
@@ -121,29 +119,14 @@ try {
     $env:HERMES_BIN = $hermes
     $env:HERMES_WEB_UI_HOME = $studioHome
 
-    Write-Host "[1/4] Preparing the Hermes research profile..."
+    Write-Host "[1/3] Preparing the Hermes research profile..."
     & (Join-Path $PSScriptRoot "Initialize-ResearchProfile.ps1") `
         -ConfigPath ([string]$config.ConfigPath) `
         -HermesExecutable $hermes `
         -NodeExecutable $node `
         -Quiet
 
-    Write-Host "[2/4] Starting Ollama on loopback..."
-    $ollamaHealthUri = "http://127.0.0.1:$ollamaPort/api/tags"
-    $ollamaHealth = Get-OptionalHealth -Uri $ollamaHealthUri
-    if ($null -eq $ollamaHealth) {
-        $ollamaProcess = Start-Process -FilePath $ollama -ArgumentList @("serve") -PassThru -WindowStyle Hidden
-        $ollamaHealth = Wait-AGNETHttp -Uri $ollamaHealthUri -TimeoutSeconds 45
-    }
-    Assert-AGNETLoopbackListener -Port $ollamaPort -ServiceName "Ollama"
-    $modelNames = @($ollamaHealth.models | ForEach-Object { [string]$_.name })
-    $embeddingModel = [string]$config.EmbeddingModel
-    $modelFound = @($modelNames | Where-Object { $_ -eq $embeddingModel -or $_.StartsWith($embeddingModel + ":") }).Count -gt 0
-    if (-not $modelFound) {
-        throw "Ollama model '$embeddingModel' is not installed. Run: ollama pull $embeddingModel"
-    }
-
-    Write-Host "[3/4] Starting LLM Wiki on loopback..."
+    Write-Host "[2/3] Starting LLM Wiki on loopback (keyword + graph retrieval)..."
     $wikiHealthUri = "http://127.0.0.1:$wikiPort/api/v1/health"
     $wikiHealth = Get-OptionalHealth -Uri $wikiHealthUri
     if ($null -eq $wikiHealth) {
@@ -170,23 +153,38 @@ try {
     if ($wikiHealth.authConfigured -ne $true) {
         throw "LLM Wiki API authentication is not configured."
     }
+    if ([string]$wikiHealth.retrievalMode -ne "keyword_graph") {
+        throw "LLM Wiki is not running in keyword_graph mode. Stop the existing LLM Wiki process and restart it through Start-AGNET.cmd."
+    }
     $wikiHeaders = @{ Authorization = "Bearer $wikiToken" }
     try {
         $wikiProjectsPayload = Invoke-RestMethod -Uri "http://127.0.0.1:$wikiPort/api/v1/projects" -Method Get -Headers $wikiHeaders -TimeoutSec 10 -UseBasicParsing
     } catch {
         throw "LLM Wiki authenticated API probe failed. Confirm that '$tokenVariable' matches the token used by LLM Wiki."
     }
+    $configuredWikiPaths = @(Get-AGNETWikiProjectPaths -Config $config)
+    if ($null -eq $wikiProjectsPayload.currentProject -or [string]::IsNullOrWhiteSpace([string]$wikiProjectsPayload.currentProject.path)) {
+        $existingWikiPaths = @($configuredWikiPaths | Where-Object { Test-Path -LiteralPath $_ -PathType Container })
+        if ($existingWikiPaths.Count -eq 1) {
+            $selectionBody = @{ path = $existingWikiPaths[0].Replace("\", "/") } | ConvertTo-Json -Compress
+            try {
+                Invoke-RestMethod -Uri "http://127.0.0.1:19827/project" -Method Post -Body $selectionBody -ContentType "application/json" -TimeoutSec 15 -UseBasicParsing | Out-Null
+                $wikiProjectsPayload = Invoke-RestMethod -Uri "http://127.0.0.1:$wikiPort/api/v1/projects" -Method Get -Headers $wikiHeaders -TimeoutSec 10 -UseBasicParsing
+            } catch {
+                throw "LLM Wiki has no current project and automatic selection of '$($existingWikiPaths[0])' failed. Open LLM Wiki once, select the personal knowledge-base project, then retry."
+            }
+        }
+    }
     if ($null -eq $wikiProjectsPayload.currentProject -or [string]::IsNullOrWhiteSpace([string]$wikiProjectsPayload.currentProject.path)) {
         throw "LLM Wiki has no current project. Open LLM Wiki once, create or select the personal knowledge-base project, then retry."
     }
     $currentWikiPath = [IO.Path]::GetFullPath([string]$wikiProjectsPayload.currentProject.path)
-    $configuredWikiPaths = @(Get-AGNETWikiProjectPaths -Config $config)
     $currentIsBackedUp = @($configuredWikiPaths | Where-Object { $_.Equals($currentWikiPath, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
     if (-not $currentIsBackedUp) {
         throw "The current LLM Wiki project is not listed in WikiProjectPaths and would not be backed up: $currentWikiPath"
     }
 
-    Write-Host "[4/4] Starting Hermes Studio on loopback..."
+    Write-Host "[3/3] Starting Hermes Studio on loopback..."
     $studioHealthUri = "http://127.0.0.1:$studioPort/health"
     $studioHealth = Get-OptionalHealth -Uri $studioHealthUri
     if ($null -eq $studioHealth) {
@@ -199,8 +197,8 @@ try {
     if ([string]$studioHealth.webui_version -ne [string]$versions.hermesStudio.packageVersion) {
         throw "Running Hermes Studio version mismatch. Expected $($versions.hermesStudio.packageVersion), got $($studioHealth.webui_version)."
     }
-    if (-not $SkipVersionCheck -and [string]$studioHealth.version -ne [string]$versions.hermesAgent.version) {
-        throw "Studio reports Hermes Agent $($studioHealth.version), expected $($versions.hermesAgent.version)."
+    if (-not $SkipVersionCheck) {
+        Assert-VersionText -ActualText ([string]$studioHealth.version) -Expected ([string]$versions.hermesAgent.version) -Name "Studio Hermes Agent"
     }
 
     $url = "http://127.0.0.1:$studioPort"
@@ -214,9 +212,6 @@ try {
     }
     if ($null -ne $llmWikiProcess) {
         try { Stop-Process -Id $llmWikiProcess.Id -Force -ErrorAction SilentlyContinue } catch {}
-    }
-    if ($null -ne $ollamaProcess) {
-        try { Stop-Process -Id $ollamaProcess.Id -Force -ErrorAction SilentlyContinue } catch {}
     }
     Write-Error -ErrorRecord $_ -ErrorAction Continue
     exit 1

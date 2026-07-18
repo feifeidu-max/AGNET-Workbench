@@ -167,6 +167,8 @@ function agentRootFromHermesBin(): string | undefined {
   const rootCandidates = [
     resolve(binDir, '..'),
     resolve(binDir, '..', '..'),
+    resolve(binDir, '..', 'Lib', 'site-packages'),
+    resolve(binDir, '..', 'lib', 'site-packages'),
     resolve(binDir, '..', 'hermes-agent'),
     resolve(binDir, '..', 'lib', 'hermes-agent'),
     resolve(binDir, '..', '..', 'hermes-agent'),
@@ -194,6 +196,12 @@ function agentRootFromHermesBin(): string | undefined {
 function hermesBinPython(): string | undefined {
   const hermesBin = resolveExecutable(getHermesBin())
   if (!hermesBin) return undefined
+  const binDir = dirname(hermesBin)
+  const siblingPython = (process.platform === 'win32'
+    ? [join(binDir, 'python.exe'), join(binDir, 'python')]
+    : [join(binDir, 'python3'), join(binDir, 'python')]
+  ).find(candidate => existsSync(candidate))
+  if (siblingPython) return siblingPython
   try {
     const first = readFileSync(hermesBin, 'utf-8').split(/\r?\n/, 1)[0]
     const match = first.match(/^#!\s*(.+)$/)
@@ -222,8 +230,8 @@ function resolveAgentRoot(explicit?: string, hermesHome = detectHermesHome()): s
   const candidates = [
     explicit,
     process.env.HERMES_AGENT_ROOT,
-    join(hermesHome, 'hermes-agent'),
     agentRootFromHermesBin(),
+    join(hermesHome, 'hermes-agent'),
     process.cwd(),
     join(process.cwd(), 'hermes-agent'),
     '/usr/local/lib/hermes-agent',

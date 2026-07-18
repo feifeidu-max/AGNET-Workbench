@@ -96,7 +96,7 @@ onMounted(() => {
             <RouterLink class="summary-tile" :to="{ name: 'hermes.knowledge' }">
               <span class="summary-label">今日论文</span>
               <strong class="summary-value">{{ summary.knowledge.todayPapers ?? 0 }}</strong>
-              <span class="summary-meta">{{ summary.knowledge.drafts }} 篇等待审核</span>
+              <span class="summary-meta">{{ summary.knowledge.awaitingReview ?? 0 }} 篇待审核</span>
             </RouterLink>
             <RouterLink class="summary-tile" :to="{ name: 'hermes.knowledge' }">
               <span class="summary-label">可信知识库</span>

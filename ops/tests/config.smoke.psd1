@@ -8,6 +8,5 @@
     RetentionCount       = 2
     StudioPort           = 38648
     LlmWikiPort          = 39828
-    OllamaPort           = 31434
     HermesGatewayPort    = 38642
 }

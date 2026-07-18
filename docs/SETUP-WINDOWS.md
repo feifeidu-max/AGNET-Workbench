@@ -5,7 +5,7 @@
 - Windows 10/11 x64，PowerShell 5.1 或更高版本。
 - Node.js 23+（推荐 24 LTS）与 pnpm。
 - Hermes Agent `0.18.2`，执行 `hermes --version` 必须返回该版本。
-- Ollama，且已下载 `bge-m3`：`ollama pull bge-m3`。
+- LLM Wiki 的 Embedding 设置保持关闭；本项目使用关键词检索与知识图谱，不需要 Ollama 或 embedding 模型。
 - 构建 LLM Wiki 时需要 Rust stable、Tauri 2 所需的 Visual Studio C++ Build Tools 和 WebView2。
 - DeepSeek 等公网模型密钥仅配置在 Hermes/LLM Wiki 的凭据入口，不写入本仓库。
 
@@ -20,7 +20,7 @@ py -m venv $hermesVenv
 & "$hermesVenv\Scripts\hermes.exe" --version
 ```
 
-随后把 `ops/config.local.psd1` 的 `HermesExecutable` 设置为上述 `hermes.exe` 的绝对路径。启动器会再次核验版本，检测到旧版或其他 Python 环境时会拒绝继续启动。
+随后把 `ops/config.local.psd1` 的 `HermesExecutable` 设置为上述 `hermes.exe` 的路径。若仓库目录包含中文，建议使用相对仓库根目录的路径（例如 `.runtime\hermes-0.18.2\Scripts\hermes.exe`），避免 Windows PowerShell 5 读取 UTF-8 数据文件时误解码；启动器会再次核验版本，检测到旧版或其他 Python 环境时会拒绝继续启动。
 
 ## 2. 构建固定源码
 
@@ -61,7 +61,7 @@ $env:AGNET_LLM_WIKI_API_TOKEN = $token
 Remove-Variable token, bytes
 ```
 
-启动器把该值注入 LLM Wiki 与 Studio 进程环境。Hermes 的 MCP 环境过滤默认不会向子进程传递 Token；`research` Profile 只保存 `${LLM_WIKI_API_TOKEN}` 占位符，由启动器在运行时解析并仅传给 LLM Wiki MCP。任何 `config.yaml`、`.env` 或 `config.local.psd1` 都不得保存真实 Token。LLM Wiki 必须保持：API 开启、匿名访问关闭、LAN 访问关闭。首次打开 LLM Wiki 后创建或选择知识库项目，并保证路径与 `WikiProjectPaths` 一致。
+启动器把该值注入 LLM Wiki 与 Studio 进程环境。Hermes 的 MCP 环境过滤默认不会向子进程传递 Token；`research` Profile 只保存 `${LLM_WIKI_API_TOKEN}` 占位符，由启动器在运行时解析并仅传给 LLM Wiki MCP。任何 `config.yaml`、`.env` 或 `config.local.psd1` 都不得保存真实 Token。LLM Wiki 必须保持：API 开启、匿名访问关闭、LAN 访问关闭。首次使用时创建知识库项目，并保证路径与 `WikiProjectPaths` 一致；当配置中恰好有一个存在的 Wiki 路径时，启动器会自动把它选为当前项目，其他情况仍需在 LLM Wiki 中手动选择。
 
 ## 4. 初始化 research Profile
 
@@ -88,9 +88,9 @@ Profile 不存在时，脚本调用 `hermes profile create research --clone --no
 
 1. 校验 Hermes Agent、Studio 和 Wiki 版本。
 2. 幂等初始化或校验 `research` Profile、只读 MCP 和禁用 Skill。
-3. 检查 Ollama `bge-m3`。
+3. 确认 LLM Wiki 采用关键词 + 知识图谱检索模式；启动器会自动设置该运行时边界。
 4. 检查 LLM Wiki 健康状态及带 Token 的 `/projects` 请求。
-5. 检查 Studio `/health`，并确认三个服务没有监听 LAN 地址。
+5. 检查 Studio `/health`，并确认启动服务没有监听 LAN 地址。
 6. 打开 `http://127.0.0.1:8648`。
 
 首次登录使用 `admin / 123456`，必须立即按界面要求修改默认账号和密码。登录会话有效期由启动器固定为 12 小时。
@@ -140,9 +140,8 @@ node .\apps\hermes-studio\bin\hermes-web-ui.mjs stop
 
 - Studio 健康检查：`Invoke-RestMethod http://127.0.0.1:8648/health`
 - Wiki 健康检查：`Invoke-RestMethod http://127.0.0.1:19828/api/v1/health`
-- Ollama 健康检查：`Invoke-RestMethod http://127.0.0.1:11434/api/tags`
 - Studio 日志：`%USERPROFILE%\.hermes-web-ui\server.log`，或本地配置中的 `StudioDataHome`。
 - Research Profile 配置：`hermes -p research config path`；MCP 列表：`hermes -p research mcp list`。
-- 端口暴露检查：`Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 8648,19828,11434`
+- 端口暴露检查：`Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 8648,19828,8642`
 
-不要把 Token 粘贴到故障日志、Wiki、Memory、聊天会话或备份目录。脚本不会备份 LLM Wiki 的 LanceDB；批准后的原文与 Markdown 是恢复源，向量索引应在恢复后重建。
+不要把 Token 粘贴到故障日志、Wiki、Memory、聊天会话或备份目录。脚本不会备份 LLM Wiki 的 LanceDB；批准后的原文与 Markdown 是恢复源。本项目的关键词 + 图谱模式不使用向量索引，恢复后无需重建 embedding。

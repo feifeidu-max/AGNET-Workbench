@@ -1,0 +1,51 @@
+﻿{
+    "startedAt":  "2026-07-18T04:38:14.1332370Z",
+    "finishedAt":  "2026-07-18T04:38:20.5275855Z",
+    "projectPath":  "C:\\Users\\13129\\Documents\\LLM-Wiki",
+    "sourceDirectory":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers",
+    "sourcePolicy":  "Existing local academic PDFs; external download blocked by environment",
+    "inputPapers":  100,
+    "inputBytes":  449825338,
+    "health":  {
+                   "version":  "0.6.4",
+                   "status":  "running",
+                   "retrievalMode":  "keyword_graph",
+                   "authConfigured":  true,
+                   "allowLanAccess":  false,
+                   "mcpEnabled":  true
+               },
+    "uploads":  0,
+    "reusedDrafts":  100,
+    "approvals":  0,
+    "failures":  0,
+    "trustedDrafts":  100,
+    "pendingDrafts":  0,
+    "publishedWikiPages":  100,
+    "trustedSourceRecords":  100,
+    "search":  {
+                   "query":  "photonic transformer accelerator",
+                   "resultCount":  10,
+                   "mode":  "hybrid",
+                   "tokenHits":  95,
+                   "vectorHits":  0,
+                   "graphHits":  3,
+                   "allResultsTrusted":  true
+               },
+    "graph":  {
+                  "nodes":  103,
+                  "edges":  100
+              },
+    "evidence":  {
+                     "sampleSourceId":  "paper:41f83ee580231f93",
+                     "hasEvidenceLocatorMarker":  true,
+                     "pageMarkerCount":  44,
+                     "rangeStatus":  206,
+                     "contentRange":  "bytes 0-15/5464209",
+                     "rangeBytes":  16
+                 },
+    "ollama":  {
+                   "processCount":  0,
+                   "embeddingsDisabledByMode":  true
+               },
+    "perPaperCount":  100
+}

@@ -13,6 +13,7 @@ export interface ServiceHealth {
 export interface WorkbenchSummary {
   knowledge: {
     drafts: number
+    awaitingReview?: number
     trusted: number
     candidates: number
     serviceOk: boolean

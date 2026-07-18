@@ -6,3 +6,7 @@ ops/*.partial
 ops/.test-runtime-*/
 .runtime/
 .tools/
+
+# Local PDF corpus used by the knowledge-base validation. Keep the manifest,
+# flow script, and report in Git, but do not distribute source papers.
+validation/knowledge-papers/*.pdf

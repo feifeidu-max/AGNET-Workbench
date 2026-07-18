@@ -28,7 +28,10 @@ chrono = { version = "0.4", features = ["clock"] }
 tauri-plugin-dialog = "2.7.1"
 pdfium-render = "0.9"
 tauri-plugin-store = "2.4.2"
-tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
+# Cookie persistence is not used by the local Wiki API or keyword/graph
+# retrieval. Keeping it disabled also avoids a writeable cookie-jar requirement
+# in restricted Windows environments.
+tauri-plugin-http = { version = "2", default-features = false, features = ["unsafe-headers", "rustls-tls", "json", "stream"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 tiny_http = "0.12"
 zip = "2"

@@ -281,6 +281,9 @@ pub async fn resolve_query_embedding(
     explicit_embedding: Option<Vec<f32>>,
     embedding_config: Option<SearchEmbeddingConfig>,
 ) -> Result<Option<Vec<f32>>, String> {
+    if keyword_only_mode() {
+        return Ok(None);
+    }
     if let Some(embedding) = explicit_embedding {
         return validate_query_embedding(embedding).map(Some);
     }
@@ -297,6 +300,15 @@ pub async fn resolve_query_embedding(
             Ok(None)
         }
     }
+}
+
+/// AGNET's launcher sets this mode when the product is configured for
+/// keyword retrieval plus graph expansion. Keep the guard in the Rust
+/// boundary so stale frontend settings cannot trigger an embedding request.
+pub(crate) fn keyword_only_mode() -> bool {
+    std::env::var("LLM_WIKI_RETRIEVAL_MODE")
+        .map(|value| value.trim().eq_ignore_ascii_case("keyword_graph"))
+        .unwrap_or(false)
 }
 
 fn validate_query_embedding(embedding: Vec<f32>) -> Result<Vec<f32>, String> {
@@ -1053,6 +1065,9 @@ async fn fetch_embedding_with_retry(
     cfg: &SearchEmbeddingConfig,
     max_retries: usize,
 ) -> Result<Vec<f32>, String> {
+    if keyword_only_mode() {
+        return Err("Embedding is disabled in keyword_graph retrieval mode.".to_string());
+    }
     let mut current = text.to_string();
     let mut attempts = 0usize;
     loop {
