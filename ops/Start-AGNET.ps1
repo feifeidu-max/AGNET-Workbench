@@ -41,6 +41,10 @@ try {
     }
 
     $config = Get-AGNETConfig -ConfigPath $ConfigPath
+    $configuredWikiExecutable = [string]$config.LlmWikiExecutable
+    if ($configuredWikiExecutable -match '(?i)(^|[\\/])target[\\/]debug([\\/]|$)') {
+        throw "LLM Wiki debug builds require the Vite development server at localhost:1420 and cannot be used by AGNET. Build/use apps\llm-wiki\src-tauri\target\release\llm-wiki.exe instead."
+    }
     $versions = Get-AGNETVersionLock
     $repositoryRoot = Get-AGNETRepositoryRoot
     $studioRoot = Join-Path $repositoryRoot "apps\hermes-studio"

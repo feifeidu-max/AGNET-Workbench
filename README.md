@@ -158,7 +158,7 @@ Set-Location ..\..
 apps\llm-wiki\src-tauri\target\release\llm-wiki.exe
 ```
 
-Tauri 首次构建通常需要数分钟，并会下载 Rust/Windows 依赖。如果构建报错，先确认 Rust、Visual Studio C++ Build Tools 和 WebView2 Runtime 均已安装，再重新执行该命令。不要把旧版本的 LLM Wiki 可执行文件当作本仓库的构建产物使用。
+Tauri 首次构建通常需要数分钟，并会下载 Rust/Windows 依赖。如果构建报错，先确认 Rust、Visual Studio C++ Build Tools 和 WebView2 Runtime 均已安装，再重新执行该命令。不要把旧版本的 LLM Wiki 可执行文件当作本仓库的构建产物使用；AGNET 启动器也会拒绝 `target\debug\llm-wiki.exe`，因为它依赖 Vite 开发服务器 `localhost:1420`，不能作为日常托盘程序运行。
 
 ### 4. 创建本机配置
 
@@ -352,10 +352,10 @@ Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 8648,19828,19827
 .\validation\run-knowledge-flow.ps1 `
   -ProjectPath "$env:USERPROFILE\Documents\LLM-Wiki" `
   -PaperDirectory "D:\your-validated-100-pdfs" `
-  -LlmWikiExecutable ".\apps\llm-wiki\src-tauri\target\debug\llm-wiki.exe"
+  -LlmWikiExecutable ".\apps\llm-wiki\src-tauri\target\release\llm-wiki.exe"
 ```
 
-该脚本仅用于开发/验收，需要恰好 100 个 PDF、可用 API Token、已创建的 Wiki 项目和 debug 可执行文件；不是首次启动的必经步骤。它会写入 `validation/knowledge-flow-report.json`。
+该脚本仅用于开发/验收，需要恰好 100 个 PDF、可用 API Token、已创建的 Wiki 项目和 release 可执行文件；不是首次启动的必经步骤。它会写入 `validation/knowledge-flow-report.json`。
 
 ## 常见问题
 
@@ -416,7 +416,7 @@ Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 8648,19828,19827
 - 不随仓库提供 DeepSeek/API Key；需要使用者在本机配置获批准的模型端点。
 - 公司数据只实现 `MockConnector`。真实连接器、实际经营数据和法定节假日调休尚未交付。
 - 100 篇 PDF 已做流程验证，但 50 个研究问题的检索质量、Top 5 命中率和引用质量验收仍需由实际领域数据完成。
-- LLM Wiki 的当前流程验证使用最新 debug 构建；正式对外分发前，应在目标机器完成一次成功的 Tauri release 构建，并用 release 可执行文件重新检查 `/api/v1/health` 中的 `retrievalMode=keyword_graph`。
+- 已在当前机器完成 LLM Wiki release 构建，并确认 `/api/v1/health` 返回 `retrievalMode=keyword_graph`。`target/` 构建物不随 Git 分发，其他源码使用者仍须在目标机器自行构建并使用 release 可执行文件。
 
 更完整的构建、运维和验收记录见：
 

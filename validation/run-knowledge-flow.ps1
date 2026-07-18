@@ -64,7 +64,7 @@ if ([string]::IsNullOrWhiteSpace($PaperDirectory)) {
     $PaperDirectory = Join-Path $PSScriptRoot "knowledge-papers"
 }
 if ([string]::IsNullOrWhiteSpace($LlmWikiExecutable)) {
-    $LlmWikiExecutable = Join-Path $PSScriptRoot "..\apps\llm-wiki\src-tauri\target\debug\llm-wiki.exe"
+    $LlmWikiExecutable = Join-Path $PSScriptRoot "..\apps\llm-wiki\src-tauri\target\release\llm-wiki.exe"
 }
 if ([string]::IsNullOrWhiteSpace($ApiToken)) {
     $ApiToken = [Environment]::GetEnvironmentVariable("AGNET_LLM_WIKI_API_TOKEN", "Process")
