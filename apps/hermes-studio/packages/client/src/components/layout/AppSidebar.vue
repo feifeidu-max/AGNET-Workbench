@@ -128,11 +128,11 @@ function handleUpdateClick() {
           </svg>
           <span>Hermes 对话</span>
         </RouteLinkItem>
-        <RouteLinkItem class="nav-item primary-nav-item" :to="{ name: 'hermes.knowledge' }" :active="selectedKey === 'hermes.knowledge'" title="个人知识库">
+        <RouteLinkItem class="nav-item primary-nav-item" :to="{ name: 'hermes.knowledge', query: { tab: 'management' } }" :active="selectedKey === 'hermes.knowledge'" title="LLM Wiki 管理">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
           </svg>
-          <span>个人知识库</span>
+          <span>LLM Wiki</span>
         </RouteLinkItem>
         <RouteLinkItem class="nav-item primary-nav-item" :to="{ name: 'hermes.companyMetrics' }" :active="selectedKey === 'hermes.companyMetrics'" title="公司数据">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -23,6 +23,28 @@ const memoryFixture = {
   },
 }
 
+const knowledgeWorkspaceFixture = {
+  service: {
+    status: 'running',
+    version: '0.6.4',
+    retrievalMode: 'keyword_graph',
+    llmConfigured: false,
+    llmConfigSource: null,
+  },
+  projects: [{
+    id: 'research-wiki',
+    name: 'Research Wiki',
+    path: 'C:\\Users\\playwright\\Documents\\LLM-Wiki',
+    current: true,
+  }],
+  currentProject: {
+    id: 'research-wiki',
+    name: 'Research Wiki',
+    path: 'C:\\Users\\playwright\\Documents\\LLM-Wiki',
+    current: true,
+  },
+}
+
 for (const viewport of [{ width: 375, height: 667 }, { width: 390, height: 844 }]) {
   test(`${viewport.width}px mobile shell keeps persisted-collapsed navigation readable and memory actions reachable`, async ({ page }) => {
     await page.setViewportSize(viewport)
@@ -31,6 +53,14 @@ for (const viewport of [{ width: 375, height: 667 }, { width: 390, height: 844 }
       window.localStorage.setItem('hermes_sidebar_collapsed', '1')
     })
     const api = await mockHermesApi(page, { memory: memoryFixture })
+    await page.route('**/api/knowledge/drafts', (route) => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ drafts: [] }),
+    }))
+    await page.route('**/api/knowledge/workspace', (route) => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(knowledgeWorkspaceFixture),
+    }))
 
     await page.goto('/#/hermes/memory')
     await expect(page.locator('.memory-section')).toHaveCount(3)
@@ -70,9 +100,24 @@ for (const viewport of [{ width: 375, height: 667 }, { width: 390, height: 844 }
     await page.locator('.hamburger-btn').click()
     const sidebar = page.locator('aside.sidebar')
     await expect(sidebar).toHaveCSS('width', '240px')
-    for (const label of ['个人工作台', 'Hermes 对话', '个人知识库', '公司数据', '定时报告', '记忆管理']) {
+    for (const label of ['个人工作台', 'Hermes 对话', 'LLM Wiki', '公司数据', '定时报告', '记忆管理']) {
       await expect(sidebar.locator('.primary-nav-item span', { hasText: label })).toBeVisible()
     }
+
+    const llmWikiLink = sidebar.locator('.primary-nav-item', { hasText: 'LLM Wiki' })
+    await expect(llmWikiLink).toHaveAttribute('href', /#\/hermes\/knowledge\?tab=management/)
+    await llmWikiLink.click()
+    await expect(page).toHaveURL(/#\/hermes\/knowledge\?tab=management/)
+    await expect(page.getByRole('heading', { name: 'LLM Wiki 管理' })).toBeVisible()
+    await expect(page.locator('.n-tabs-tab.n-tabs-tab--active', { hasText: 'LLM Wiki 管理' })).toBeVisible()
+
+    const knowledgeHeader = page.locator('.knowledge-page .page-header')
+    const knowledgeTitle = page.getByRole('heading', { name: 'LLM Wiki 管理' })
+    const [headerBox, titleBox] = await Promise.all([knowledgeHeader.boundingBox(), knowledgeTitle.boundingBox()])
+    expect(headerBox).not.toBeNull()
+    expect(titleBox).not.toBeNull()
+    expect(titleBox!.width).toBeGreaterThan(200)
+    expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(headerBox!.x + headerBox!.width + 1)
 
     const rootOverflow = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,

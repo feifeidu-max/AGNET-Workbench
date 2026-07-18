@@ -68,9 +68,9 @@ function openApiRelay() {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
         <span>对话</span>
       </RouteLinkItem>
-      <RouteLinkItem class="workspace-shortcut" :to="{ name: 'hermes.knowledge' }" title="个人知识库">
+      <RouteLinkItem class="workspace-shortcut" :to="{ name: 'hermes.knowledge', query: { tab: 'management' } }" title="LLM Wiki 管理">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
-        <span>知识库</span>
+        <span>LLM Wiki</span>
       </RouteLinkItem>
       <RouteLinkItem class="workspace-shortcut" :to="{ name: 'hermes.companyMetrics' }" title="公司数据">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>

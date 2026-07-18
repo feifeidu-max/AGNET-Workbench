@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   NAlert,
   NButton,
@@ -37,13 +38,16 @@ import {
   type KnowledgeWorkspace,
   type ReadingCandidate,
 } from '@/api/workbench'
+import { resolveKnowledgeTab, type KnowledgeTab } from '@/views/hermes/knowledge-tabs'
 
 const MarkdownRenderer = defineAsyncComponent(async () => (
   await import('@/components/hermes/chat/MarkdownRenderer.vue')
 ).default)
 
+const route = useRoute()
+const router = useRouter()
 const message = useMessage()
-const activeTab = ref<'drafts' | 'trusted' | 'qa' | 'candidates' | 'management'>('drafts')
+const activeTab = ref<KnowledgeTab>(resolveKnowledgeTab(route.query.tab))
 const fileInput = ref<HTMLInputElement | null>(null)
 const drafts = ref<KnowledgeDraft[]>([])
 const draftsLoading = ref(false)
@@ -91,6 +95,17 @@ const projectOptions = computed(() => (workspace.value?.projects || []).map((pro
   label: project.name,
   value: project.id,
 })))
+
+function updateActiveTab(value: string | number) {
+  const nextTab = resolveKnowledgeTab(value)
+  activeTab.value = nextTab
+  if (route.query.tab === nextTab) return
+  void router.replace({ query: { ...route.query, tab: nextTab } })
+}
+
+watch(() => route.query.tab, (tab) => {
+  activeTab.value = resolveKnowledgeTab(tab)
+})
 
 const statusLabels: Record<KnowledgeDraftStatus, string> = {
   uploaded: '已上传',
@@ -381,12 +396,12 @@ onMounted(() => {
   <div class="workbench-page knowledge-page">
     <header class="page-header">
       <div class="workbench-page-heading">
-        <h2 class="header-title">个人知识库</h2>
-        <p>先审核、后入库；Hermes 只引用可信知识与可定位的论文证据</p>
+        <h2 class="header-title">LLM Wiki 管理</h2>
+        <p>论文知识在 Studio 内统一管理；先审核、后入库，Hermes 只引用可信知识与可定位的论文证据</p>
       </div>
       <div class="knowledge-header-actions">
         <NButton size="small" quaternary @click="openGraph">知识图谱</NButton>
-        <NButton size="small" quaternary @click="activeTab = 'management'">知识库管理</NButton>
+        <NButton size="small" quaternary @click="updateActiveTab('management')">LLM Wiki 管理</NButton>
         <NTag size="small" :type="reviewCount ? 'warning' : 'default'" :bordered="false">
           {{ reviewCount }} 篇待审核
         </NTag>
@@ -394,7 +409,7 @@ onMounted(() => {
     </header>
 
     <div class="workbench-content">
-      <NTabs v-model:value="activeTab" type="line" animated>
+      <NTabs :value="activeTab" type="line" animated @update:value="updateActiveTab">
         <NTabPane name="drafts" tab="论文归纳与审核">
           <NAlert v-if="draftsError" class="workbench-alert" type="error" title="无法加载审核队列">
             {{ draftsError }}
@@ -559,9 +574,9 @@ onMounted(() => {
           <div v-else-if="!candidatesError" class="workbench-state"><NEmpty description="本地证据不足时，再从外部来源查找候选论文" /></div>
         </NTabPane>
 
-        <NTabPane name="management" tab="知识库管理">
+        <NTabPane name="management" tab="LLM Wiki 管理">
           <NAlert type="success" :bordered="false" class="workbench-alert">
-            LLM Wiki 作为本机后台知识服务由 Studio 管理，不提供独立窗口、托盘图标或浏览器入口。
+            这是 LLM Wiki 的唯一管理入口。它作为本机后台知识服务由 Studio 管理，不提供独立窗口、托盘图标或浏览器入口。
           </NAlert>
           <NAlert v-if="workspaceError" class="workbench-alert" type="error" title="无法读取知识库服务状态">
             {{ workspaceError }}
@@ -1012,7 +1027,20 @@ onMounted(() => {
   gap: 10px;
 }
 
+@media (max-width: $breakpoint-mobile) {
+  .knowledge-page .page-header {
+    align-items: stretch;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .knowledge-header-actions {
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 720px) {
+
   .qa-composer {
     grid-template-columns: minmax(0, 1fr);
   }

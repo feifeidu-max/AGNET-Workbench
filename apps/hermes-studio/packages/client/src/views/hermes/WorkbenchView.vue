@@ -93,12 +93,12 @@ onMounted(() => {
             <span class="workbench-section-note">仅展示本机已同步数据</span>
           </div>
           <div class="workbench-summary-grid">
-            <RouterLink class="summary-tile" :to="{ name: 'hermes.knowledge' }">
+            <RouterLink class="summary-tile" :to="{ name: 'hermes.knowledge', query: { tab: 'drafts' } }">
               <span class="summary-label">今日论文</span>
               <strong class="summary-value">{{ summary.knowledge.todayPapers ?? 0 }}</strong>
               <span class="summary-meta">{{ summary.knowledge.awaitingReview ?? 0 }} 篇待审核</span>
             </RouterLink>
-            <RouterLink class="summary-tile" :to="{ name: 'hermes.knowledge' }">
+            <RouterLink class="summary-tile" :to="{ name: 'hermes.knowledge', query: { tab: 'trusted' } }">
               <span class="summary-label">可信知识库</span>
               <strong class="summary-value">{{ summary.knowledge.trusted }}</strong>
               <span class="summary-meta">{{ summary.knowledge.candidates }} 篇待读候选</span>
