@@ -101,6 +101,7 @@ try {
     $wikiPort = [int]$config.LlmWikiPort
     $hermesHome = Get-AGNETHermesHome -Config $config
     $studioHome = Get-AGNETStudioDataHome -Config $config
+    $metricsDbPath = Get-AGNETMetricsDbPath -Config $config
     $managedWikiProjectsRoot = Get-AGNETManagedWikiProjectsRoot -Config $config
     New-Item -ItemType Directory -Path $hermesHome -Force | Out-Null
     New-Item -ItemType Directory -Path $studioHome -Force | Out-Null
@@ -128,6 +129,7 @@ try {
     $env:HERMES_HOME = $hermesHome
     $env:HERMES_BIN = $hermes
     $env:HERMES_WEB_UI_HOME = $studioHome
+    $env:AGNET_METRICS_DB_PATH = $metricsDbPath
 
     Write-Host "[1/3] Preparing the Hermes research profile..."
     & (Join-Path $PSScriptRoot "Initialize-ResearchProfile.ps1") `
