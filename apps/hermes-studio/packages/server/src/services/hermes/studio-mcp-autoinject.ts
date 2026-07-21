@@ -19,6 +19,11 @@ const LEGACY_SERVER_NAMES = new Set([
   'hermes-studio-mcp',
 ])
 const MANAGED_ENV_KEY = 'HERMES_WEB_UI_MANAGED_MCP'
+// The local knowledge base (LLM Wiki) is exposed as the `llm-wiki` MCP server.
+// It must be available ONLY to the `research` profile; every other profile
+// (notably `default`) must never connect to the local knowledge base.
+const KNOWLEDGE_BASE_MCP_SERVER = 'llm-wiki'
+const RESEARCH_PROFILE_NAME = 'research'
 const LEGACY_COMMANDS = new Set([
   'hermes-lan-peer-mcp',
   'hermes-devices-mcp',
@@ -172,9 +177,19 @@ async function injectIntoProfile(profile: string): Promise<BundledMcpInjectionTa
     let injected = false
     let hadManagedExisting = false
 
+    // Strip the local knowledge base (LLM Wiki) from any profile other than
+    // `research`. This guarantees a `default` (or any other) session never
+    // connects to the local knowledge base, regardless of a stray or cloned
+    // `llm-wiki` entry left behind in its config.yaml.
+    if (profile !== RESEARCH_PROFILE_NAME && isRecord(cfg.mcp_servers) && cfg.mcp_servers[KNOWLEDGE_BASE_MCP_SERVER]) {
+      delete cfg.mcp_servers[KNOWLEDGE_BASE_MCP_SERVER]
+      changed = true
+    }
+
+
     for (const [name, server] of Object.entries(cfg.mcp_servers)) {
       if (MANAGED_SERVER_NAMES.has(name)) continue
-      if (LEGACY_SERVER_NAMES.has(name) && !isManagedServer(server)) {
+      if (!changed && LEGACY_SERVER_NAMES.has(name) && !isManagedServer(server)) {
         return {
           data: cfg,
           write: false,
@@ -203,7 +218,7 @@ async function injectIntoProfile(profile: string): Promise<BundledMcpInjectionTa
       }
       hadManagedExisting = true
 
-      if (!isManagedServer(existing)) {
+      if (!changed && !isManagedServer(existing)) {
         return {
           data: cfg,
           write: false,
@@ -215,7 +230,7 @@ async function injectIntoProfile(profile: string): Promise<BundledMcpInjectionTa
         }
       }
 
-      if (isRecord(existing) && existing.enabled === false) {
+      if (!changed && isRecord(existing) && existing.enabled === false) {
         return {
           data: cfg,
           write: false,
