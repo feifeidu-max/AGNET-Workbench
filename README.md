@@ -1,4 +1,4 @@
-# NanWangAgent / AGNET 本地智能工作台
+# AGNET 本地智能工作台
 
 AGNET 是面向个人研究与日常工作的 Windows 本地智能工作台。它不重新实现 Agent 核心，而是在固定版本的 Hermes Studio、Hermes Agent 和 LLM Wiki 上增加了论文知识库和记忆管理能力。
 
@@ -99,8 +99,8 @@ Ollama、GPU、CUDA、`bge-m3` 都不在本项目的依赖列表中。只有 CPU
 使用 Git：
 
 ```powershell
-git clone https://github.com/feifeidu-max/NanWangAgent.git
-Set-Location .\NanWangAgent
+git clone <你的远程仓库地址>
+Set-Location .\AGNET
 git checkout main
 ```
 

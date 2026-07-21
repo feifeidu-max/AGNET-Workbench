@@ -1,8 +1,8 @@
 ﻿{
     "startedAt":  "2026-07-18T04:38:14.1332370Z",
     "finishedAt":  "2026-07-18T04:38:20.5275855Z",
-    "projectPath":  "C:\\Users\\13129\\Documents\\LLM-Wiki",
-    "sourceDirectory":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers",
+    "projectPath":  "C:\\Users\\local\\Documents\\LLM-Wiki",
+    "sourceDirectory":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers",
     "sourcePolicy":  "Existing local academic PDFs; external download blocked by environment",
     "inputPapers":  100,
     "inputBytes":  449825338,

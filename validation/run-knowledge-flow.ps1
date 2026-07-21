@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ProjectPath = "C:\Users\13129\Documents\LLM-Wiki",
+    [string]$ProjectPath = "C:\Users\local\Documents\LLM-Wiki",
     [string]$PaperDirectory = "",
     [string]$LlmWikiExecutable = "",
     [string]$ApiToken = ""

@@ -5,803 +5,803 @@
     "Papers":  [
                    {
                        "Index":  1,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-22\\24-Dynamic Electro-Optic Analog Memory for Neuromorphic Photonic Computing.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-22\\24-Dynamic Electro-Optic Analog Memory for Neuromorphic Photonic Computing.pdf",
                        "OriginalName":  "24-Dynamic Electro-Optic Analog Memory for Neuromorphic Photonic Computing.pdf",
                        "Bytes":  27933276,
                        "Sha256":  "3e39efdd0af6b9cf7341d40ccd08f1fe050cdafff8610bf99aaa7199f0007940",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-001.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-001.pdf"
                    },
                    {
                        "Index":  2,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\21-IECICC-Electronics-photonics_co-design_for_robust_control_of_optical_devices_in_dense_integrated_photonic_circuits.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\21-IECICC-Electronics-photonics_co-design_for_robust_control_of_optical_devices_in_dense_integrated_photonic_circuits.pdf",
                        "OriginalName":  "21-IECICC-Electronics-photonics_co-design_for_robust_control_of_optical_devices_in_dense_integrated_photonic_circuits.pdf",
                        "Bytes":  1868745,
                        "Sha256":  "e7e4308c4a55d90de688196173637a5262b44b6f808de9996dfd0b514feed847",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-002.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-002.pdf"
                    },
                    {
                        "Index":  3,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\22-DAC-PHANES_ReRAM-based Photonic Accelerator.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\22-DAC-PHANES_ReRAM-based Photonic Accelerator.pdf",
                        "OriginalName":  "22-DAC-PHANES_ReRAM-based Photonic Accelerator.pdf",
                        "Bytes":  1000281,
                        "Sha256":  "15514ac585afc6162d5a1a780dd154e7e71d4317b1fd12afd03bfc8df0916b44",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-003.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-003.pdf"
                    },
                    {
                        "Index":  4,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\22-IE Journal Of Selected Topics In Quantum Electronic-Coherent_Photonic_Crossbar_Arrays_for_Large-Scale_Matrix-Matrix_Multiplication.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\22-IE Journal Of Selected Topics In Quantum Electronic-Coherent_Photonic_Crossbar_Arrays_for_Large-Scale_Matrix-Matrix_Multiplication.pdf",
                        "OriginalName":  "22-IE Journal Of Selected Topics In Quantum Electronic-Coherent_Photonic_Crossbar_Arrays_for_Large-Scale_Matrix-Matrix_Multiplication.pdf",
                        "Bytes":  4507133,
                        "Sha256":  "5f06c0758109cb27a07f5ebcd5f4ddb3087f21934567c960de40e8f7a0d8373f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-004.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-004.pdf"
                    },
                    {
                        "Index":  5,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\22-Light_ Science \u0026 Applications-Reconfigurable nonlinear photonic activation function for photonic neural network based on non-volatile opto-resistive RAM switch.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\22-Light_ Science \u0026 Applications-Reconfigurable nonlinear photonic activation function for photonic neural network based on non-volatile opto-resistive RAM switch.pdf",
                        "OriginalName":  "22-Light_ Science \u0026 Applications-Reconfigurable nonlinear photonic activation function for photonic neural network based on non-volatile opto-resistive RAM switch.pdf",
                        "Bytes":  1327308,
                        "Sha256":  "7380a44e08c64c505dd66d9c209f908d1205474c491c7eaae77bac89a1f026dd",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-005.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-005.pdf"
                    },
                    {
                        "Index":  6,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\24-IEDM-Novel Parallel Digital Optical Computing System (DOC) for Generative AI.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\24-IEDM-Novel Parallel Digital Optical Computing System (DOC) for Generative AI.pdf",
                        "OriginalName":  "24-IEDM-Novel Parallel Digital Optical Computing System (DOC) for Generative AI.pdf",
                        "Bytes":  601284,
                        "Sha256":  "53a6456a685c297aa9fa96b876bbea141b0dd0401d4e1910d739dfa5f158e6dd",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-006.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-006.pdf"
                    },
                    {
                        "Index":  7,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\24-Journal Of Lightwave Technology-An All-Optical General-Purpose CPU and Optical computer Architecture.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\24-Journal Of Lightwave Technology-An All-Optical General-Purpose CPU and Optical computer Architecture.pdf",
                        "OriginalName":  "24-Journal Of Lightwave Technology-An All-Optical General-Purpose CPU and Optical computer Architecture.pdf",
                        "Bytes":  3503230,
                        "Sha256":  "356ac172f0db957547a0431ed90d5b594ffbe49c2ea1a08ce961b93895d83f5a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-007.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-007.pdf"
                    },
                    {
                        "Index":  8,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\Silicon_Photonics_Codesign_for_Deep_Learning.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\0_temp\\2-25\\Silicon_Photonics_Codesign_for_Deep_Learning.pdf",
                        "OriginalName":  "Silicon_Photonics_Codesign_for_Deep_Learning.pdf",
                        "Bytes":  4809069,
                        "Sha256":  "bd14ffdeeaf55fed0a17c746592179043ded8ea0a19818bb93fbaa5a9f4514d2",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-008.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-008.pdf"
                    },
                    {
                        "Index":  9,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\08-Optics-express-Toward optical signal processing using photonic reservoir computing.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\08-Optics-express-Toward optical signal processing using photonic reservoir computing.pdf",
                        "OriginalName":  "08-Optics-express-Toward optical signal processing using photonic reservoir computing.pdf",
                        "Bytes":  284243,
                        "Sha256":  "67dff7d486f1deb028517fd2609ff8e95df99b39a6ee9f8fb923fa3db89b8bf0",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-009.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-009.pdf"
                    },
                    {
                        "Index":  10,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\09-IEEE-Computer_Systems_Based_on_Silicon_Photonic_Interconnects.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\09-IEEE-Computer_Systems_Based_on_Silicon_Photonic_Interconnects.pdf",
                        "OriginalName":  "09-IEEE-Computer_Systems_Based_on_Silicon_Photonic_Interconnects.pdf",
                        "Bytes":  3056080,
                        "Sha256":  "6c9348191abdf7b1a610d443c05542630737595308fa419d330c3d0285af44e4",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-010.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-010.pdf"
                    },
                    {
                        "Index":  11,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\12-PhysRevLett-Photonic Nonlinear Transient Computing with Multiple-Delay Wavelength Dynamics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\12-PhysRevLett-Photonic Nonlinear Transient Computing with Multiple-Delay Wavelength Dynamics.pdf",
                        "OriginalName":  "12-PhysRevLett-Photonic Nonlinear Transient Computing with Multiple-Delay Wavelength Dynamics.pdf",
                        "Bytes":  596475,
                        "Sha256":  "84794048635ef91696e4fe2fbf2b61dcf5147f56f9b79fdec0b3a4d408a6fa84",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-011.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-011.pdf"
                    },
                    {
                        "Index":  12,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\13-Optics Express-A scalable silicon photonic chip-scale optical switch for high performance computing systems.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\13-Optics Express-A scalable silicon photonic chip-scale optical switch for high performance computing systems.pdf",
                        "OriginalName":  "13-Optics Express-A scalable silicon photonic chip-scale optical switch for high performance computing systems.pdf",
                        "Bytes":  4391973,
                        "Sha256":  "7eb35fc96ac04269553234144ebc24e5b825a2b470694438f6347b50ceac829c",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-012.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-012.pdf"
                    },
                    {
                        "Index":  13,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\17-NATURE-photonics-Deep learning with coherent nanophotonic circuits.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\17-NATURE-photonics-Deep learning with coherent nanophotonic circuits.pdf",
                        "OriginalName":  "17-NATURE-photonics-Deep learning with coherent nanophotonic circuits.pdf",
                        "Bytes":  1724058,
                        "Sha256":  "60a584985904fbb935d59ec6cd339460263df2085d9fefba5e75a6549227c1fd",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-013.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-013.pdf"
                    },
                    {
                        "Index":  14,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\22-N-Quantum computational advantage with a programmable photonic processor.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\22-N-Quantum computational advantage with a programmable photonic processor.pdf",
                        "OriginalName":  "22-N-Quantum computational advantage with a programmable photonic processor.pdf",
                        "Bytes":  2791716,
                        "Sha256":  "0005ecbf9c27c517da9f634d6459a137907ecd042dd9066e36139e67ccaac63f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-014.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-014.pdf"
                    },
                    {
                        "Index":  15,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\24-Science-taichi.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\24-Science-taichi.pdf",
                        "OriginalName":  "24-Science-taichi.pdf",
                        "Bytes":  3746356,
                        "Sha256":  "f977f1560f3e01c046c6efbacf9465d75ab62e91ef05a535f466760893b8c610",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-015.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-015.pdf"
                    },
                    {
                        "Index":  16,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\IEEE-ASCEND A Scalable and Energy-Efficient Deep Neural Network Accelerator With Photonic Interconnects.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\IEEE-ASCEND A Scalable and Energy-Efficient Deep Neural Network Accelerator With Photonic Interconnects.pdf",
                        "OriginalName":  "IEEE-ASCEND A Scalable and Energy-Efficient Deep Neural Network Accelerator With Photonic Interconnects.pdf",
                        "Bytes":  3653079,
                        "Sha256":  "fc1e5a464394b5f60f78b2eaf868251db87e95185aecdd2acfb51b62e934c4bd",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-016.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-016.pdf"
                    },
                    {
                        "Index":  17,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\Nature-photonics-Single-chip photonic deep neural network.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\2_background\\Nature-photonics-Single-chip photonic deep neural network.pdf",
                        "OriginalName":  "Nature-photonics-Single-chip photonic deep neural network.pdf",
                        "Bytes":  8965828,
                        "Sha256":  "0c854ff994177012f80da140863d4b5359437a7601bc8355aa96bc0b2e0ea099",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-017.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-017.pdf"
                    },
                    {
                        "Index":  18,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\20-NATURE-Parallel convolutional processing using an integrated photonic tensor core.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\20-NATURE-Parallel convolutional processing using an integrated photonic tensor core.pdf",
                        "OriginalName":  "20-NATURE-Parallel convolutional processing using an integrated photonic tensor core.pdf",
                        "Bytes":  5246636,
                        "Sha256":  "99b4e4d7a87197eef3db62eae5bf9fe405f05a3c2f559bcd3056effadaa2dc01",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-018.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-018.pdf"
                    },
                    {
                        "Index":  19,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\20-NC-Electronic-photonic arithmetic logic unit for high-speed computing.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\20-NC-Electronic-photonic arithmetic logic unit for high-speed computing.pdf",
                        "OriginalName":  "20-NC-Electronic-photonic arithmetic logic unit for high-speed computing.pdf",
                        "Bytes":  1856920,
                        "Sha256":  "b7e34c43df692eb36eb8b27d80800951991c0719e684d775575318c6896c4744",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-019.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-019.pdf"
                    },
                    {
                        "Index":  20,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\20-sciadv-A scalable photonic computer solving the subset.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\20-sciadv-A scalable photonic computer solving the subset.pdf",
                        "OriginalName":  "20-sciadv-A scalable photonic computer solving the subset.pdf",
                        "Bytes":  2642718,
                        "Sha256":  "b910f08ed4addff9d3c271c949c0eb1c9af328927fb37a63eb6eff523e769914",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-020.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-020.pdf"
                    },
                    {
                        "Index":  21,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\21-nature-11 TOPS photonic convolutional accelerator for optical neural networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\21-nature-11 TOPS photonic convolutional accelerator for optical neural networks.pdf",
                        "OriginalName":  "21-nature-11 TOPS photonic convolutional accelerator for optical neural networks.pdf",
                        "Bytes":  24019862,
                        "Sha256":  "849b1a1a6a9ec71d7fb8189b61aaaa53695de6f9020aa76862eab07e8b0ba38f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-021.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-021.pdf"
                    },
                    {
                        "Index":  22,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-DAC-PHANES_ReRAM-based Photonic Accelerator for Deep Neural.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-DAC-PHANES_ReRAM-based Photonic Accelerator for Deep Neural.pdf",
                        "OriginalName":  "22-DAC-PHANES_ReRAM-based Photonic Accelerator for Deep Neural.pdf",
                        "Bytes":  994313,
                        "Sha256":  "0673005ee9bcf2473b43cb93539bd39d47bab1f004c645266b0e898b0e58b76d",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-022.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-022.pdf"
                    },
                    {
                        "Index":  23,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-nature Light Science \u0026 Applications-Photonic matrix multiplication lights up photonic.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-nature Light Science \u0026 Applications-Photonic matrix multiplication lights up photonic.pdf",
                        "OriginalName":  "22-nature Light Science \u0026 Applications-Photonic matrix multiplication lights up photonic.pdf",
                        "Bytes":  5637678,
                        "Sha256":  "3fbcc520c669683c04bec349205e04891c03f4c315ec1958b1eadd3a147ba56f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-023.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-023.pdf"
                    },
                    {
                        "Index":  24,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-OpticsExpress-StarLight.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-OpticsExpress-StarLight.pdf",
                        "OriginalName":  "22-OpticsExpress-StarLight.pdf",
                        "Bytes":  9640189,
                        "Sha256":  "367b144cb5a791b9b178466dbf5edf86b2b4d629cf7f9267cf5c95996c92aa3c",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-024.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-024.pdf"
                    },
                    {
                        "Index":  25,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-sciadv-All-optical graph representation learning using integrated diffractive photonic computing units.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\22-sciadv-All-optical graph representation learning using integrated diffractive photonic computing units.pdf",
                        "OriginalName":  "22-sciadv-All-optical graph representation learning using integrated diffractive photonic computing units.pdf",
                        "Bytes":  1400288,
                        "Sha256":  "db0215cc6046fddb3583b01328495b79ca9622520d745744e1109a454ae187d7",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-025.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-025.pdf"
                    },
                    {
                        "Index":  26,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-ISCA-Flumen- Dynamic Processing in the Photonic Interconnect.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-ISCA-Flumen- Dynamic Processing in the Photonic Interconnect.pdf",
                        "OriginalName":  "23-ISCA-Flumen- Dynamic Processing in the Photonic Interconnect.pdf",
                        "Bytes":  854963,
                        "Sha256":  "c9e574bd25c0b3552c45927c81836c4007635cb60f9b7804f555c7c5e274ffc4",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-026.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-026.pdf"
                    },
                    {
                        "Index":  27,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-Laser\u0026Photonics Reviews  - Macho‐Ortiz - Analog Programmable‐Photonic Computation.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-Laser\u0026Photonics Reviews  - Macho‐Ortiz - Analog Programmable‐Photonic Computation.pdf",
                        "OriginalName":  "23-Laser\u0026Photonics Reviews  - Macho‐Ortiz - Analog Programmable‐Photonic Computation.pdf",
                        "Bytes":  2405883,
                        "Sha256":  "0a3b30ee80a593b870bb86bf91688de8eb766eeea5685bbbf770f554f5054145",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-027.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-027.pdf"
                    },
                    {
                        "Index":  28,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-NC-Microcomb-based integrated photonic processing unit.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-NC-Microcomb-based integrated photonic processing unit.pdf",
                        "OriginalName":  "23-NC-Microcomb-based integrated photonic processing unit.pdf",
                        "Bytes":  2723768,
                        "Sha256":  "2920044be0126597d4fd92419ceffb2603945a4853a347083e05496184c5964d",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-028.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-028.pdf"
                    },
                    {
                        "Index":  29,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-optica-Experimental evaluation of digitally verifiable photonic computing for blockchain and cryptocurrency.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-optica-Experimental evaluation of digitally verifiable photonic computing for blockchain and cryptocurrency.pdf",
                        "OriginalName":  "23-optica-Experimental evaluation of digitally verifiable photonic computing for blockchain and cryptocurrency.pdf",
                        "Bytes":  10310133,
                        "Sha256":  "7f3c5cdb1a9b51899d649e544ccfbf397afc6267ea7206341900cba66e9485bb",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-029.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-029.pdf"
                    },
                    {
                        "Index":  30,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-optica-Reduced rank photonic computing accelerator.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\23-optica-Reduced rank photonic computing accelerator.pdf",
                        "OriginalName":  "23-optica-Reduced rank photonic computing accelerator.pdf",
                        "Bytes":  22655484,
                        "Sha256":  "4843acb67a67b2e203ce674f83a48dc90c4a6f812168e6c70bab8c7edc3ddc0f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-030.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-030.pdf"
                    },
                    {
                        "Index":  31,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-Advanced Photonics-Large-scale distributed diffractive-interference hybrid photonic chiplets.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-Advanced Photonics-Large-scale distributed diffractive-interference hybrid photonic chiplets.pdf",
                        "OriginalName":  "24-Advanced Photonics-Large-scale distributed diffractive-interference hybrid photonic chiplets.pdf",
                        "Bytes":  3168244,
                        "Sha256":  "a55e8c4e2d54539b4a30b0fd6c2d22ef8cf0d6c568b9086d0348d99df05c11f5",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-031.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-031.pdf"
                    },
                    {
                        "Index":  32,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-Engineering-EEG opto-processor epileptic seizure detection using diffractive photonic computing units.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-Engineering-EEG opto-processor epileptic seizure detection using diffractive photonic computing units.pdf",
                        "OriginalName":  "24-Engineering-EEG opto-processor epileptic seizure detection using diffractive photonic computing units.pdf",
                        "Bytes":  3135731,
                        "Sha256":  "9b6425d02f66deea271c84aafc222714e781392abda8962ba80928eb6ddce429",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-032.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-032.pdf"
                    },
                    {
                        "Index":  33,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-Journal of Lightwave Technology-Inverse-Designed_Photonic_Computing_Core_for_Parallel_Matrix-Vector_Multiplication.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-Journal of Lightwave Technology-Inverse-Designed_Photonic_Computing_Core_for_Parallel_Matrix-Vector_Multiplication.pdf",
                        "OriginalName":  "24-Journal of Lightwave Technology-Inverse-Designed_Photonic_Computing_Core_for_Parallel_Matrix-Vector_Multiplication.pdf",
                        "Bytes":  22104978,
                        "Sha256":  "c973d06b89f811532cb0444495c4977883c4def5538722ae17aa5bb88da8aa1c",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-033.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-033.pdf"
                    },
                    {
                        "Index":  34,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-NC-Probabilistic photonic computing with chaotic light.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\24-NC-Probabilistic photonic computing with chaotic light.pdf",
                        "OriginalName":  "24-NC-Probabilistic photonic computing with chaotic light.pdf",
                        "Bytes":  2725284,
                        "Sha256":  "ea29083deb758ecd877e60b659547b7987bf7ddfa109481d5bb9cb9039d743b2",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-034.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-034.pdf"
                    },
                    {
                        "Index":  35,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\20-Applied-Physics-Reviews-Nonlinear-topological-photonics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\20-Applied-Physics-Reviews-Nonlinear-topological-photonics.pdf",
                        "OriginalName":  "20-Applied-Physics-Reviews-Nonlinear-topological-photonics.pdf",
                        "Bytes":  5459222,
                        "Sha256":  "363ef00b2ea906fa16cabdc799b4502f1a78988747d13404c3803fa1924ab50f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-035.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-035.pdf"
                    },
                    {
                        "Index":  36,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Applied-Physics-Reviews-Integrated photon-pair sources with nonlinear optics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Applied-Physics-Reviews-Integrated photon-pair sources with nonlinear optics.pdf",
                        "OriginalName":  "21-Applied-Physics-Reviews-Integrated photon-pair sources with nonlinear optics.pdf",
                        "Bytes":  2504013,
                        "Sha256":  "c5714dbd2bb21786c86b319736a3652c2183d83350c7f0a1e2779010bd8269ba",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-036.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-036.pdf"
                    },
                    {
                        "Index":  37,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Laser   Photonics Reviews-Zheng - Integrated Gallium Nitride Nonlinear Photonics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Laser   Photonics Reviews-Zheng - Integrated Gallium Nitride Nonlinear Photonics.pdf",
                        "OriginalName":  "21-Laser   Photonics Reviews-Zheng - Integrated Gallium Nitride Nonlinear Photonics.pdf",
                        "Bytes":  1133497,
                        "Sha256":  "a728b60b59f085f9972e3c7ce2e0e871cf2f1631b2d81814a1496c5d287d0f62",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-037.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-037.pdf"
                    },
                    {
                        "Index":  38,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Light Science \u0026 Applications-Nonlinear control of photonic higher-order topological bound states in the continuum.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Light Science \u0026 Applications-Nonlinear control of photonic higher-order topological bound states in the continuum.pdf",
                        "OriginalName":  "21-Light Science \u0026 Applications-Nonlinear control of photonic higher-order topological bound states in the continuum.pdf",
                        "Bytes":  2591574,
                        "Sha256":  "a4ca1597e16f749685598988ebc979f1dabec668e16cd41da2a1623018dc0fb0",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-038.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-038.pdf"
                    },
                    {
                        "Index":  39,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Nature Electronics-A silicon photonic–electronic neural network for fibre nonlinearity compensation.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Nature Electronics-A silicon photonic–electronic neural network for fibre nonlinearity compensation.pdf",
                        "OriginalName":  "21-Nature Electronics-A silicon photonic–electronic neural network for fibre nonlinearity compensation.pdf",
                        "Bytes":  2369293,
                        "Sha256":  "f936ce55a586abbcddecb7fb86f117658aa44ae9fe682feac43ef1afffef7683",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-039.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-039.pdf"
                    },
                    {
                        "Index":  40,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Nature Physics-Emergent nonlinear phenomena in a driven dissipative photonic dimer.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-Nature Physics-Emergent nonlinear phenomena in a driven dissipative photonic dimer.pdf",
                        "OriginalName":  "21-Nature Physics-Emergent nonlinear phenomena in a driven dissipative photonic dimer.pdf",
                        "Bytes":  6262359,
                        "Sha256":  "271675453891f80a354eead932e3427e8bf8ba3d5bb1df1e39c4d86230cde5a1",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-040.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-040.pdf"
                    },
                    {
                        "Index":  41,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-naturephysics-Nonlinear second-order photonic topological insulators.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-naturephysics-Nonlinear second-order photonic topological insulators.pdf",
                        "OriginalName":  "21-naturephysics-Nonlinear second-order photonic topological insulators.pdf",
                        "Bytes":  3667328,
                        "Sha256":  "7ffe4fe174eda374b6178b0ffd91968ac36acfa9ae7aaf037f55cc4760f671e0",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-041.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-041.pdf"
                    },
                    {
                        "Index":  42,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-optica-Nonlinear-photonic-crystalsfrom-2D-to-3D.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\21-optica-Nonlinear-photonic-crystalsfrom-2D-to-3D.pdf",
                        "OriginalName":  "21-optica-Nonlinear-photonic-crystalsfrom-2D-to-3D.pdf",
                        "Bytes":  16292437,
                        "Sha256":  "9c44c7b8e97de19407c1568aac2239e09bd9d44fc2ec2eba266a7ee41f3a011a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-042.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-042.pdf"
                    },
                    {
                        "Index":  43,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\22-Advanced Photonics-Applications of thin-film lithium niobate in nonlinear integrated photonics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\22-Advanced Photonics-Applications of thin-film lithium niobate in nonlinear integrated photonics.pdf",
                        "OriginalName":  "22-Advanced Photonics-Applications of thin-film lithium niobate in nonlinear integrated photonics.pdf",
                        "Bytes":  5256822,
                        "Sha256":  "8ebea71e4e2ba4a57e353a0e332b1ffc3f35df356ab96d2cd550146cc5f54e3e",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-043.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-043.pdf"
                    },
                    {
                        "Index":  44,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\23-Laser   Photonics Reviews- Zhang - Graphene Oxide for Nonlinear Integrated Photonics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\3_circuits_to_unit\\nonlinear\\23-Laser   Photonics Reviews- Zhang - Graphene Oxide for Nonlinear Integrated Photonics.pdf",
                        "OriginalName":  "23-Laser   Photonics Reviews- Zhang - Graphene Oxide for Nonlinear Integrated Photonics.pdf",
                        "Bytes":  10365441,
                        "Sha256":  "822510c5e4c32ad0e5138ce6c29ad0a35fab10d8ac6398063e94b9304580d1f9",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-044.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-044.pdf"
                    },
                    {
                        "Index":  45,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\19-DATE-HolyLight_A_Nanophotonic_Accelerator_for_Deep_Learning_in_Data_Centers.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\19-DATE-HolyLight_A_Nanophotonic_Accelerator_for_Deep_Learning_in_Data_Centers.pdf",
                        "OriginalName":  "19-DATE-HolyLight_A_Nanophotonic_Accelerator_for_Deep_Learning_in_Data_Centers.pdf",
                        "Bytes":  605314,
                        "Sha256":  "4eba98ff69f36ea6cba9a053f63b8ef53736ea24c449832d57898ce7539c9384",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-045.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-045.pdf"
                    },
                    {
                        "Index":  46,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\19-sciadv-In-memory computing on a photonic platform.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\19-sciadv-In-memory computing on a photonic platform.pdf",
                        "OriginalName":  "19-sciadv-In-memory computing on a photonic platform.pdf",
                        "Bytes":  970226,
                        "Sha256":  "b330a3ce5aca08e67a253ed4bd9745eaf651e1a18679bcb8ec1ed776af4d6580",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-046.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-046.pdf"
                    },
                    {
                        "Index":  47,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\20-DAC-Power-Aware Pruning for Ultrafast, Energy-Efficient, and Accurate Optical Neural Network Design.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\20-DAC-Power-Aware Pruning for Ultrafast, Energy-Efficient, and Accurate Optical Neural Network Design.pdf",
                        "OriginalName":  "20-DAC-Power-Aware Pruning for Ultrafast, Energy-Efficient, and Accurate Optical Neural Network Design.pdf",
                        "Bytes":  1379347,
                        "Sha256":  "65dcd34907ff0930b2367197269a55aab3370197583f560df74a1f4360362f56",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-047.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-047.pdf"
                    },
                    {
                        "Index":  48,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\20-DATE-LightBulb_A_Photonic-Nonvolatile-Memory-based_Accelerator_for_Binarized_Convolutional_Neural_Networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\20-DATE-LightBulb_A_Photonic-Nonvolatile-Memory-based_Accelerator_for_Binarized_Convolutional_Neural_Networks.pdf",
                        "OriginalName":  "20-DATE-LightBulb_A_Photonic-Nonvolatile-Memory-based_Accelerator_for_Binarized_Convolutional_Neural_Networks.pdf",
                        "Bytes":  299276,
                        "Sha256":  "012c8f412095aaba92c07c553112b86e7aad610c1e93f385031ffcede4539f5c",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-048.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-048.pdf"
                    },
                    {
                        "Index":  49,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\20-HPCA-PIXEL_Photonic_Neural_Network_Accelerator.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\20-HPCA-PIXEL_Photonic_Neural_Network_Accelerator.pdf",
                        "OriginalName":  "20-HPCA-PIXEL_Photonic_Neural_Network_Accelerator.pdf",
                        "Bytes":  714296,
                        "Sha256":  "a66d1870271a0b71ecc6614a829c0e29253ca1a2dc7d27bc2730c7dab64d3336",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-049.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-049.pdf"
                    },
                    {
                        "Index":  50,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\21-DAC-CrossLight_A_Cross-Layer_Optimized_Silicon_Photonic_Neural_Network_Accelerator.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\21-DAC-CrossLight_A_Cross-Layer_Optimized_Silicon_Photonic_Neural_Network_Accelerator.pdf",
                        "OriginalName":  "21-DAC-CrossLight_A_Cross-Layer_Optimized_Silicon_Photonic_Neural_Network_Accelerator.pdf",
                        "Bytes":  1275439,
                        "Sha256":  "d807e5361fe52ff11ca5662b2408b789fdd14ac3ff55bec2589cdc13adf2377d",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-050.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-050.pdf"
                    },
                    {
                        "Index":  51,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\21-ISCA-Albireo_Energy-Efficient_Acceleration_of_Convolutional_Neural_Networks_via_Silicon_Photonics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\21-ISCA-Albireo_Energy-Efficient_Acceleration_of_Convolutional_Neural_Networks_via_Silicon_Photonics.pdf",
                        "OriginalName":  "21-ISCA-Albireo_Energy-Efficient_Acceleration_of_Convolutional_Neural_Networks_via_Silicon_Photonics.pdf",
                        "Bytes":  8723086,
                        "Sha256":  "4d194240b02b50e6aa560f9e7c890bfd0c9a5faebcaf7a523026938c06deca3f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-051.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-051.pdf"
                    },
                    {
                        "Index":  52,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\22-DAC-ADEPT Automatic differentiable design of photonic tensor cores.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\22-DAC-ADEPT Automatic differentiable design of photonic tensor cores.pdf",
                        "OriginalName":  "22-DAC-ADEPT Automatic differentiable design of photonic tensor cores.pdf",
                        "Bytes":  1819686,
                        "Sha256":  "73d3dff6ecba826bddb1cbde98579a0081d0d95b139c2c28a13e2333c837a7fb",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-052.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-052.pdf"
                    },
                    {
                        "Index":  53,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\22-HPCA-SPACX_Silicon_Photonics-based_Scalable_Chiplet_Accelerator_for_DNN_Inference.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\22-HPCA-SPACX_Silicon_Photonics-based_Scalable_Chiplet_Accelerator_for_DNN_Inference.pdf",
                        "OriginalName":  "22-HPCA-SPACX_Silicon_Photonics-based_Scalable_Chiplet_Accelerator_for_DNN_Inference.pdf",
                        "Bytes":  26172087,
                        "Sha256":  "0a6da633f8c1a2bd8fb668f3af543d21be306a9841a407a31197e85da05b62da",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-053.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-053.pdf"
                    },
                    {
                        "Index":  54,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\22-TPDS-SPRINT_A_High-Performance_Energy-Efficient_and_Scalable_Chiplet-Based_Accelerator_With_Photonic_Interconnects_for_CNN_Inference.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\22-TPDS-SPRINT_A_High-Performance_Energy-Efficient_and_Scalable_Chiplet-Based_Accelerator_With_Photonic_Interconnects_for_CNN_Inference.pdf",
                        "OriginalName":  "22-TPDS-SPRINT_A_High-Performance_Energy-Efficient_and_Scalable_Chiplet-Based_Accelerator_With_Photonic_Interconnects_for_CNN_Inference.pdf",
                        "Bytes":  2783861,
                        "Sha256":  "9ef6830f2e1769dd6219606708470d24db28d9537c393ed397265486e73557a9",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-054.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-054.pdf"
                    },
                    {
                        "Index":  55,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-ACS Photonics-integrated-photonic-computing-beyond-the-von-neumann-architecture.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-ACS Photonics-integrated-photonic-computing-beyond-the-von-neumann-architecture.pdf",
                        "OriginalName":  "23-ACS Photonics-integrated-photonic-computing-beyond-the-von-neumann-architecture.pdf",
                        "Bytes":  13418573,
                        "Sha256":  "bd86e99c1fc5f83c10848aa74405cbc3d55abd38822891b74c102f02c272ee6f",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-055.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-055.pdf"
                    },
                    {
                        "Index":  56,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-DAC-Physics-aware Roughness Optimization for Diffractive Optical Neural Networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-DAC-Physics-aware Roughness Optimization for Diffractive Optical Neural Networks.pdf",
                        "OriginalName":  "23-DAC-Physics-aware Roughness Optimization for Diffractive Optical Neural Networks.pdf",
                        "Bytes":  3539603,
                        "Sha256":  "9acc7a2478f526558cbbecd041c86e64126a6c14eca301db432e683447e50ad6",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-056.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-056.pdf"
                    },
                    {
                        "Index":  57,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-HPCA-PhotoFourier_A_Photonic_Joint_Transform_Correlator-Based_Neural_Network_Accelerator.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-HPCA-PhotoFourier_A_Photonic_Joint_Transform_Correlator-Based_Neural_Network_Accelerator.pdf",
                        "OriginalName":  "23-HPCA-PhotoFourier_A_Photonic_Joint_Transform_Correlator-Based_Neural_Network_Accelerator.pdf",
                        "Bytes":  10952863,
                        "Sha256":  "68bd0d9eba7a4f6c68322251b80fe1c9358bc86f2c1f7383d4ca37c442aab0fd",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-057.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-057.pdf"
                    },
                    {
                        "Index":  58,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-MICRO-ReFOCUS_Reusing_Light_for_Efficient_Fourier_Optics-Based_Photonic_Neural_Network_Accelerator.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-MICRO-ReFOCUS_Reusing_Light_for_Efficient_Fourier_Optics-Based_Photonic_Neural_Network_Accelerator.pdf",
                        "OriginalName":  "23-MICRO-ReFOCUS_Reusing_Light_for_Efficient_Fourier_Optics-Based_Photonic_Neural_Network_Accelerator.pdf",
                        "Bytes":  3001978,
                        "Sha256":  "65542f4337971e039cb1634aba2464e215f3709ca37b72727fafe40d33de95ef",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-058.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-058.pdf"
                    },
                    {
                        "Index":  59,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-sciadv-Ultrafast dynamic machine vision with spatiotemporal photonic computing.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\23-sciadv-Ultrafast dynamic machine vision with spatiotemporal photonic computing.pdf",
                        "OriginalName":  "23-sciadv-Ultrafast dynamic machine vision with spatiotemporal photonic computing.pdf",
                        "Bytes":  3956869,
                        "Sha256":  "ecf68fb3433f066664c6cc7a0c71697175bcf9206a9ce7d330b1d37b161fc28a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-059.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-059.pdf"
                    },
                    {
                        "Index":  60,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\24-HPCA-Lightening-Transformer_A_Dynamically-Operated_Optically-Interconnected_Photonic_Transformer_Accelerator (1).pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\24-HPCA-Lightening-Transformer_A_Dynamically-Operated_Optically-Interconnected_Photonic_Transformer_Accelerator (1).pdf",
                        "OriginalName":  "24-HPCA-Lightening-Transformer_A_Dynamically-Operated_Optically-Interconnected_Photonic_Transformer_Accelerator (1).pdf",
                        "Bytes":  1416113,
                        "Sha256":  "693aee88e3f4062e293889589e2c32d96626a71568bea33c4d5e98542c695bd1",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-060.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-060.pdf"
                    },
                    {
                        "Index":  61,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\24-Journal of Lightwave Technology-Photonic-Electronic_Integrated_Circuits_for_High-Performance_Computing_and_AI_Accelerators.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\24-Journal of Lightwave Technology-Photonic-Electronic_Integrated_Circuits_for_High-Performance_Computing_and_AI_Accelerators.pdf",
                        "OriginalName":  "24-Journal of Lightwave Technology-Photonic-Electronic_Integrated_Circuits_for_High-Performance_Computing_and_AI_Accelerators.pdf",
                        "Bytes":  16687731,
                        "Sha256":  "2ebecf302254c011c4f25fac430754f4851be4a1e3087b956623def500640d64",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-061.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-061.pdf"
                    },
                    {
                        "Index":  62,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\24-nature-Photonics for artificial intelligence and neuromorphic computing.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\4_archi\\24-nature-Photonics for artificial intelligence and neuromorphic computing.pdf",
                        "OriginalName":  "24-nature-Photonics for artificial intelligence and neuromorphic computing.pdf",
                        "Bytes":  535061,
                        "Sha256":  "c4ec81073c85761984475d9320ee85f1cb2f7ba82b75ebc9c86cf6f939860827",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-062.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-062.pdf"
                    },
                    {
                        "Index":  63,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\5_software-hardware-co-design\\18-Nature_Electronics_Terahertz_Integrated_Electronic_and_Hybrid_Electronic_Photonic_Systems.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\5_software-hardware-co-design\\18-Nature_Electronics_Terahertz_Integrated_Electronic_and_Hybrid_Electronic_Photonic_Systems.pdf",
                        "OriginalName":  "18-Nature_Electronics_Terahertz_Integrated_Electronic_and_Hybrid_Electronic_Photonic_Systems.pdf",
                        "Bytes":  5834404,
                        "Sha256":  "8703ef291120de853f6e7d7ba1b319c265b00fdd19a85f2e0d72fdbdd5b5f431",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-063.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-063.pdf"
                    },
                    {
                        "Index":  64,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\5_software-hardware-co-design\\24-Nature Communications-Photonic-electronic integrated circuit-based coherent LiDAR engine.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\5_software-hardware-co-design\\24-Nature Communications-Photonic-electronic integrated circuit-based coherent LiDAR engine.pdf",
                        "OriginalName":  "24-Nature Communications-Photonic-electronic integrated circuit-based coherent LiDAR engine.pdf",
                        "Bytes":  11621542,
                        "Sha256":  "1153bc621e27621a7cd5ef452834957e4891ff29b62bef9f2ffef0eda0a2ca0a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-064.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-064.pdf"
                    },
                    {
                        "Index":  65,
-                       "OriginalPath":  "C:\\Users\\13129\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\5_software-hardware-co-design\\24-N-Partial coherence enhances parallelized photonic computing.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Desktop\\桌面\\ACMCS-2025-SCUT\\cited paper\\5_software-hardware-co-design\\24-N-Partial coherence enhances parallelized photonic computing.pdf",
                        "OriginalName":  "24-N-Partial coherence enhances parallelized photonic computing.pdf",
                        "Bytes":  3567425,
                        "Sha256":  "5b622b72f105aa72c9d1b36eac6b0e7917b61ddf01cdc2e8a59e35865da95624",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-065.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-065.pdf"
                    },
                    {
                        "Index":  66,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-05\\Yu et al_2024_8-bit Transformer Inference and Fine-tuning for Edge Accelerators.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-05\\Yu et al_2024_8-bit Transformer Inference and Fine-tuning for Edge Accelerators.pdf",
                        "OriginalName":  "Yu et al_2024_8-bit Transformer Inference and Fine-tuning for Edge Accelerators.pdf",
                        "Bytes":  2298866,
                        "Sha256":  "603e30b0c01113fb4007677ee33e0f601bee7f8b5af54a0e1dde6a0dea8ae015",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-066.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-066.pdf"
                    },
                    {
                        "Index":  67,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-06\\2020_MICRO_MatRaptor_A_Sparse-Sparse_Matrix_Multiplication_Accelerator_Based_on_Row-Wise_Product.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-06\\2020_MICRO_MatRaptor_A_Sparse-Sparse_Matrix_Multiplication_Accelerator_Based_on_Row-Wise_Product.pdf",
                        "OriginalName":  "2020_MICRO_MatRaptor_A_Sparse-Sparse_Matrix_Multiplication_Accelerator_Based_on_Row-Wise_Product.pdf",
                        "Bytes":  659971,
                        "Sha256":  "e9687f5042f003153d691123a367e9277ca25ab561ef89b1b5ab1e2fc1617e27",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-067.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-067.pdf"
                    },
                    {
                        "Index":  68,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-06\\2023-ICCV-I-ViT Integer-only Quantization for Efficient Vision Transformer Inference.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-06\\2023-ICCV-I-ViT Integer-only Quantization for Efficient Vision Transformer Inference.pdf",
                        "OriginalName":  "2023-ICCV-I-ViT Integer-only Quantization for Efficient Vision Transformer Inference.pdf",
                        "Bytes":  3272239,
                        "Sha256":  "ab7b5eaf1f4ce5d64768339bcdf250f4b13bc24ff95345053c4527c4769fea81",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-068.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-068.pdf"
                    },
                    {
                        "Index":  69,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-06\\24HPCA-Lightening-Transformer.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-06\\24HPCA-Lightening-Transformer.pdf",
                        "OriginalName":  "24HPCA-Lightening-Transformer.pdf",
                        "Bytes":  3430270,
                        "Sha256":  "139fa39d9d43e4a7e58e60f99507f9b593cc1415307ac17790d73927ef5de26c",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-069.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-069.pdf"
                    },
                    {
                        "Index":  70,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\2305.04546v1.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\2305.04546v1.pdf",
                        "OriginalName":  "2305.04546v1.pdf",
                        "Bytes":  715518,
                        "Sha256":  "456e1a532d87e05bf31ae4376c69e87cc89803ed79fbe51f651cb1ec1fd4b5dd",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-070.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-070.pdf"
                    },
                    {
                        "Index":  71,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\A_Low-Cost_Fault-Tolerant_Approach_for_Hardware_Implementation_of_Artificial_Neural_Networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\A_Low-Cost_Fault-Tolerant_Approach_for_Hardware_Implementation_of_Artificial_Neural_Networks.pdf",
                        "OriginalName":  "A_Low-Cost_Fault-Tolerant_Approach_for_Hardware_Implementation_of_Artificial_Neural_Networks.pdf",
                        "Bytes":  296536,
                        "Sha256":  "6af614c47fef7de056daeb6df2c3ad9bd16d9c668bcbade3c129c7f33ae3dd99",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-071.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-071.pdf"
                    },
                    {
                        "Index":  72,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\FT_SNN.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\FT_SNN.pdf",
                        "OriginalName":  "FT_SNN.pdf",
                        "Bytes":  2646250,
                        "Sha256":  "c0ccbb88f628c989e83e1c508fc2c82e1745bafb313aebdfc73bee1964aed7cc",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-072.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-072.pdf"
                    },
                    {
                        "Index":  73,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\ReAFM_A_Reconfigurable_Nonlinear_Activation_Function_Module_for_Neural_Networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-08\\ReAFM_A_Reconfigurable_Nonlinear_Activation_Function_Module_for_Neural_Networks.pdf",
                        "OriginalName":  "ReAFM_A_Reconfigurable_Nonlinear_Activation_Function_Module_for_Neural_Networks.pdf",
                        "Bytes":  1802238,
                        "Sha256":  "d4b1ec92b8375b1045cda7086657bf0d9410aec2e8b0a93963c0d6676ce3e2c8",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-073.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-073.pdf"
                    },
                    {
                        "Index":  74,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\A Closer Look at Self-Supervised Lightweight Vision Transformers.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\A Closer Look at Self-Supervised Lightweight Vision Transformers.pdf",
                        "OriginalName":  "A Closer Look at Self-Supervised Lightweight Vision Transformers.pdf",
                        "Bytes":  3578035,
                        "Sha256":  "cb207c213c091a1e7bc734815925de446352a4a6ebb8f2545e5d84d9a33b6e4a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-074.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-074.pdf"
                    },
                    {
                        "Index":  75,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\Dual adaptive training of photonic neural networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\Dual adaptive training of photonic neural networks.pdf",
                        "OriginalName":  "Dual adaptive training of photonic neural networks.pdf",
                        "Bytes":  6151700,
                        "Sha256":  "d7f6bd74981bbedcd486abd3aa78062bc72420aa645ca10241a9f1c6385edbe2",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-075.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-075.pdf"
                    },
                    {
                        "Index":  76,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\Inverse-designed low-index-contrast structures on a silicon photonics platform for vector–matrix multiplication.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\Inverse-designed low-index-contrast structures on a silicon photonics platform for vector–matrix multiplication.pdf",
                        "OriginalName":  "Inverse-designed low-index-contrast structures on a silicon photonics platform for vector–matrix multiplication.pdf",
                        "Bytes":  2138475,
                        "Sha256":  "0ebbfc9c98e6091cc7eaa7910a4631e5ffb99be55362777546f4fcde78217159",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-076.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-076.pdf"
                    },
                    {
                        "Index":  77,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\Scientific Machine Learning Through Physics–Informed Neural Networks Where we are and What’s Next.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-09\\Scientific Machine Learning Through Physics–Informed Neural Networks Where we are and What’s Next.pdf",
                        "OriginalName":  "Scientific Machine Learning Through Physics–Informed Neural Networks Where we are and What’s Next.pdf",
                        "Bytes":  1532145,
                        "Sha256":  "893779fb4224db40396710d6f8ecb413977b9c79b01e9b3fd62d20c5ca4bed93",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-077.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-077.pdf"
                    },
                    {
                        "Index":  78,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-10\\DyGNN_Algorithm_and_Architecture_Support_of_Dynamic_Pruning_for_Graph_Neural_Networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-10\\DyGNN_Algorithm_and_Architecture_Support_of_Dynamic_Pruning_for_Graph_Neural_Networks.pdf",
                        "OriginalName":  "DyGNN_Algorithm_and_Architecture_Support_of_Dynamic_Pruning_for_Graph_Neural_Networks.pdf",
                        "Bytes":  1765105,
                        "Sha256":  "8c95edf182fa1f7541a3bf574c973e959f1e6d04b5c4d74e53df00a7580448a5",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-078.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-078.pdf"
                    },
                    {
                        "Index":  79,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-10\\ReGNN_A_Redundancy-Eliminated_Graph_Neural_Networks_Accelerator.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-10\\ReGNN_A_Redundancy-Eliminated_Graph_Neural_Networks_Accelerator.pdf",
                        "OriginalName":  "ReGNN_A_Redundancy-Eliminated_Graph_Neural_Networks_Accelerator.pdf",
                        "Bytes":  1659395,
                        "Sha256":  "1aed202cf84cf07d4cce733582e98a0d41242d7635aa2bb5db814e4b80c64209",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-079.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-079.pdf"
                    },
                    {
                        "Index":  80,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-11\\reram.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-11\\reram.pdf",
                        "OriginalName":  "reram.pdf",
                        "Bytes":  51274,
                        "Sha256":  "d353947b5445c8832d4ead098e1f9bd4525a09cd8c6113deb9ae2643ac729b82",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-080.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-080.pdf"
                    },
                    {
                        "Index":  81,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-12\\EPIC-BOE_An Electronic-Photonic Chiplet Integration Technology with IC Processes for Broadband Optical Engine Applications.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-12\\EPIC-BOE_An Electronic-Photonic Chiplet Integration Technology with IC Processes for Broadband Optical Engine Applications.pdf",
                        "OriginalName":  "EPIC-BOE_An Electronic-Photonic Chiplet Integration Technology with IC Processes for Broadband Optical Engine Applications.pdf",
                        "Bytes":  796340,
                        "Sha256":  "229528ff4ad1025c51dcd95e78e96fe5a24ec3b3c6cec2e84c14f58b10a46510",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-081.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-081.pdf"
                    },
                    {
                        "Index":  82,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-12\\Novel Parallel Digital Optical Computing System (DOC) for Generative AI.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-12\\Novel Parallel Digital Optical Computing System (DOC) for Generative AI.pdf",
                        "OriginalName":  "Novel Parallel Digital Optical Computing System (DOC) for Generative AI.pdf",
                        "Bytes":  601467,
                        "Sha256":  "f7c1301c298a026e9da15d7346f4b821ea4052db0d74f8adb1f4468d4a677c1a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-082.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-082.pdf"
                    },
                    {
                        "Index":  83,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-12\\Optical neural networks progress and challenges.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2024-12\\Optical neural networks progress and challenges.pdf",
                        "OriginalName":  "Optical neural networks progress and challenges.pdf",
                        "Bytes":  7754047,
                        "Sha256":  "47843dbf259ca23b749cd0dee3df4386a0c6fe3a583dce07d2f8b5753e81c9f5",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-083.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-083.pdf"
                    },
                    {
                        "Index":  84,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\2024-nature-photics-Nonlinear processing with linear optics.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\2024-nature-photics-Nonlinear processing with linear optics.pdf",
                        "OriginalName":  "2024-nature-photics-Nonlinear processing with linear optics.pdf",
                        "Bytes":  1649478,
                        "Sha256":  "517c9e3163f8b3f1efd3ad59547188f868aee12fdf00a20ba0160c0a8f0fd925",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-084.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-084.pdf"
                    },
                    {
                        "Index":  85,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\2205.11244v1.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\2205.11244v1.pdf",
                        "OriginalName":  "2205.11244v1.pdf",
                        "Bytes":  1162646,
                        "Sha256":  "ca54c1432bd436e52d3c038acefd43bcc3b9f85462ab9cc97bbc83edf531d5a9",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-085.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-085.pdf"
                    },
                    {
                        "Index":  86,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\An_Efficient_Optical_Sparse_Matrix_Multiplication_Accelerator_for_Graph_Neural_Networks.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\An_Efficient_Optical_Sparse_Matrix_Multiplication_Accelerator_for_Graph_Neural_Networks.pdf",
                        "OriginalName":  "An_Efficient_Optical_Sparse_Matrix_Multiplication_Accelerator_for_Graph_Neural_Networks.pdf",
                        "Bytes":  4983599,
                        "Sha256":  "7809ff385c96482c48818525f561bab9bf4aef2f899c595fa9b4657233b6975d",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-086.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-086.pdf"
                    },
                    {
                        "Index":  87,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\Mohammed - 2013 - Optical Time Division Multiplexing (OTDM) and Hybrid WDMOTDM PON Performance Investigation.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\Mohammed - 2013 - Optical Time Division Multiplexing (OTDM) and Hybrid WDMOTDM PON Performance Investigation.pdf",
                        "OriginalName":  "Mohammed - 2013 - Optical Time Division Multiplexing (OTDM) and Hybrid WDMOTDM PON Performance Investigation.pdf",
                        "Bytes":  839591,
                        "Sha256":  "4d60fd0ef8c4337c4f8f7ef45af98799aeddcaad63db170f50e5866621528b8a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-087.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-087.pdf"
                    },
                    {
                        "Index":  88,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\OPIMA Optical Processing-In-Memory for.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\OPIMA Optical Processing-In-Memory for.pdf",
                        "OriginalName":  "OPIMA Optical Processing-In-Memory for.pdf",
                        "Bytes":  2199194,
                        "Sha256":  "a88ab20939459b7c7ba5a582b0ffe88e0ed7674976042d7443b8b9391cbfbc9a",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-088.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-088.pdf"
                    },
                    {
                        "Index":  89,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\photon2020104p49.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\photon2020104p49.pdf",
                        "OriginalName":  "photon2020104p49.pdf",
                        "Bytes":  304933,
                        "Sha256":  "f8fe13a188bf831bbdcad111571cd02d65aff1555bc8fd259833afa839ab10a9",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-089.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-089.pdf"
                    },
                    {
                        "Index":  90,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\The physics of optical computing.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-01\\The physics of optical computing.pdf",
                        "OriginalName":  "The physics of optical computing.pdf",
                        "Bytes":  6207010,
                        "Sha256":  "e72a17b46bac1c8e2141295f71a17495c8954df69bd9ca077650573c34af4600",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-090.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-090.pdf"
                    },
                    {
                        "Index":  91,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\24HPCA-Lightening-Transformer.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\24HPCA-Lightening-Transformer.pdf",
                        "OriginalName":  "24HPCA-Lightening-Transformer.pdf",
                        "Bytes":  3245466,
                        "Sha256":  "ca0890d0f6f7114845d7eaafa3731c8711a09760cda7a2d6bf0d49d14ef2ceb3",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-091.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-091.pdf"
                    },
                    {
                        "Index":  92,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\flash-attention.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\flash-attention.pdf",
                        "OriginalName":  "flash-attention.pdf",
                        "Bytes":  1453687,
                        "Sha256":  "315f252a8c791dd051ae84b531e4549465279c2a7264606a9cfe1f3495d9dfc8",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-092.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-092.pdf"
                    },
                    {
                        "Index":  93,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\IEEE - Print receipt.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\IEEE - Print receipt.pdf",
                        "OriginalName":  "IEEE - Print receipt.pdf",
                        "Bytes":  112133,
                        "Sha256":  "555d73f4ecd5499ea0cf6a6ff398137a5324e47d4276b4cfbb9c146a27398f9d",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-093.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-093.pdf"
                    },
                    {
                        "Index":  94,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\Nature Materials_Ferroelectric-defined reconfigurable homojunctions for in-memory sensing and computing(1).pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\Nature Materials_Ferroelectric-defined reconfigurable homojunctions for in-memory sensing and computing(1).pdf",
                        "OriginalName":  "Nature Materials_Ferroelectric-defined reconfigurable homojunctions for in-memory sensing and computing(1).pdf",
                        "Bytes":  2129613,
                        "Sha256":  "37084fbbe4e2d6bb3d4518bd01db46ad8ff231119703de4e7ee1674ddaaa0029",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-094.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-094.pdf"
                    },
                    {
                        "Index":  95,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\PPoPP22-QGTC_ Accelerating Quantized Graph Neural Networks via GPU Tensor Core重要.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\PPoPP22-QGTC_ Accelerating Quantized Graph Neural Networks via GPU Tensor Core重要.pdf",
                        "OriginalName":  "PPoPP22-QGTC_ Accelerating Quantized Graph Neural Networks via GPU Tensor Core重要.pdf",
                        "Bytes":  1208374,
                        "Sha256":  "c601cf53afbd8e3fcbe4a0b6334b9361482d5da5f5ebfeaacbcd811ee2568634",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-095.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-095.pdf"
                    },
                    {
                        "Index":  96,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\SC(CCF-A)-2024-MCFuser High-Performance and Rapid Fusion of Memory-Bound Compute-Intensive Operators.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-02\\SC(CCF-A)-2024-MCFuser High-Performance and Rapid Fusion of Memory-Bound Compute-Intensive Operators.pdf",
                        "OriginalName":  "SC(CCF-A)-2024-MCFuser High-Performance and Rapid Fusion of Memory-Bound Compute-Intensive Operators.pdf",
                        "Bytes":  981905,
                        "Sha256":  "3b56ae842d307187fd32f3bca277e6753e328cea13abc7f93acf2f56180ad8cc",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-096.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-096.pdf"
                    },
                    {
                        "Index":  97,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-03\\2402.00395v1.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-03\\2402.00395v1.pdf",
                        "OriginalName":  "2402.00395v1.pdf",
                        "Bytes":  3212222,
                        "Sha256":  "873c5d45b499fcf416e95d8f64e2f7cda3263cb4422e8494aa2534a73c63e707",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-097.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-097.pdf"
                    },
                    {
                        "Index":  98,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-03\\Advances in Optical Technologies - 2010 - Ambs - Optical Computing  A 60‐Year Adventure.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-03\\Advances in Optical Technologies - 2010 - Ambs - Optical Computing  A 60‐Year Adventure.pdf",
                        "OriginalName":  "Advances in Optical Technologies - 2010 - Ambs - Optical Computing  A 60‐Year Adventure.pdf",
                        "Bytes":  934841,
                        "Sha256":  "5d178c31283a18170d06ea8e7f7f5e5603ea1cd84d8d1ddc895f70b6b70c032c",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-098.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-098.pdf"
                    },
                    {
                        "Index":  99,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-03\\论文.pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-03\\论文.pdf",
                        "OriginalName":  "论文.pdf",
                        "Bytes":  1126594,
                        "Sha256":  "825188168ee16958632210066b2176c2bc05c6d0fad5ecc6ac9715930fb57495",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-099.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-099.pdf"
                    },
                    {
                        "Index":  100,
-                       "OriginalPath":  "C:\\Users\\13129\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-04\\1903.12272v2 (1).pdf",
+                       "OriginalPath":  "C:\\Users\\local\\Documents\\WeChat Files\\wxid_9bei3grkqbdl22\\FileStorage\\File\\2025-04\\1903.12272v2 (1).pdf",
                        "OriginalName":  "1903.12272v2 (1).pdf",
                        "Bytes":  5464209,
                        "Sha256":  "41f83ee580231f93fe1275892051fe319cd993787cb6342f8a24f1e9f0f3ec09",
-                       "ValidationPath":  "C:\\Users\\13129\\Documents\\南网AGNET\\validation\\knowledge-papers\\paper-100.pdf"
+                       "ValidationPath":  "C:\\Users\\local\\Documents\\AGNET\\validation\\knowledge-papers\\paper-100.pdf"
                    }
                ]
 }

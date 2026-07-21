@@ -34,7 +34,7 @@
 | Agent Bridge | `127.0.0.1:18765`，状态 `ready`，Hermes `v0.18.2` |
 | Studio 数据目录 | `%USERPROFILE%\.hermes-web-ui` |
 | LLM Wiki | `127.0.0.1:19828`，状态 `running`，`studioManaged=true`，`retrievalMode=keyword_graph`，运行 `target/release/llm-wiki.exe` |
-| LLM Wiki 项目 | `C:/Users/13129/Documents/LLM-Wiki`，100 篇论文页面和 100 条可信源记录，已设为 current project |
+| LLM Wiki 项目 | `C:/Users/local/Documents/LLM-Wiki`，100 篇论文页面和 100 条可信源记录，已设为 current project |
 | LLM Wiki Token | 已生成到当前 Windows 用户环境变量；未写入仓库、Profile、Wiki、日志或 app-state |
 | research Profile | 已用 Hermes `0.18.2` 初始化；内置 `llm-wiki` Skill 禁用，Bridge 工具集固定为 `llm-wiki` |
 
