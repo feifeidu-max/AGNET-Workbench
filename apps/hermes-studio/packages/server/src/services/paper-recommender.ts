@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { config } from '../config'
 import { llmWikiJson, LlmWikiApiError, publicKnowledgeErrorMessage } from './knowledge/llm-wiki-client'
+import { recordPaperRecommenderRun } from './paper-recommender-job'
 
 const RECOMMEND_INTERVAL_MS = 6 * 60 * 60 * 1000
 const FIRST_RUN_DELAY_MS = 30 * 1000
@@ -364,6 +365,7 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
       error: items.length === 0 ? '暂无可推荐的外部顶会论文候选' : null,
     }
     persist(payload)
+    recordPaperRecommenderRun(payload.status, payload.error)
     return payload
   } catch (error) {
     const message = error instanceof LlmWikiApiError
@@ -378,6 +380,7 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
       error: message,
     }
     persist(payload)
+    recordPaperRecommenderRun(payload.status, payload.error)
     return payload
   }
 }

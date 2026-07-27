@@ -16,6 +16,7 @@ import { setupKanbanEventsWebSocket } from './routes/hermes/kanban-events'
 import { startVersionCheck } from './routes/health'
 import { registerRoutes } from './routes'
 import { schedulePaperRecommendations } from './services/paper-recommender'
+import { ensurePaperRecommenderJob } from './services/paper-recommender-job'
 import { setGroupChatServer } from './routes/hermes/group-chat'
 import { setChatRunServer } from './routes/hermes/chat-run'
 import { GroupChatServer } from './services/hermes/group-chat'
@@ -321,6 +322,13 @@ export async function bootstrap() {
 
   // 论文推荐：启动时延迟首跑 + 每 6 小时定时刷新（依据最近对话话题检索 llm-wiki 外部论文候选）。
   schedulePaperRecommendations()
+  // 论文推荐同时注册为 Hermes cron 任务，使其出现在工作台 Jobs 页面（/#/hermes/jobs）。
+  try {
+    ensurePaperRecommenderJob()
+    console.log('[bootstrap] paper recommender registered as Hermes cron job')
+  } catch (err) {
+    console.warn('[bootstrap] failed to register paper recommender cron job:', err instanceof Error ? err.message : err)
+  }
   console.log('[bootstrap] routes registered')
 
   // SPA fallback
