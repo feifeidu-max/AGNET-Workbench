@@ -135,6 +135,7 @@ export interface PaperRecommendationsPayload {
   status: 'pending' | 'success' | 'partial' | 'failed'
   generatedAt: string | null
   focus: string | null
+  paperCount: number
   nextRunAt: string | null
   count: number
   items: PaperRecommendation[]

@@ -307,7 +307,7 @@ const recStatusLabel = computed(() => {
             :description="summary.paperRecommendations && summary.paperRecommendations.error ? summary.paperRecommendations.error : '暂无可推荐的外部论文，稍后自动刷新'"
           />
           <p v-if="summary.paperRecommendations && summary.paperRecommendations.focus" class="paper-rec-focus">
-            依据近期话题：{{ summary.paperRecommendations.focus }}
+            依据本地知识库（{{ summary.paperRecommendations.paperCount }} 篇已收录论文）相似推荐
           </p>
         </section>
 
@@ -369,17 +369,18 @@ const recStatusLabel = computed(() => {
 }
 
 .paper-rec-item {
-  padding: 12px 14px;
-  border: 1px solid var(--border-color, #2a2f3a);
-  border-radius: 10px;
-  background: var(--card-bg, #161a22);
+  padding: 14px 16px;
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  background: $bg-card;
 }
 
 .paper-rec-title {
-  margin: 0 0 6px;
-  font-size: 14px;
+  margin: 0 0 8px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.45;
+  color: $text-primary;
 }
 
 .paper-rec-title a {
@@ -388,26 +389,30 @@ const recStatusLabel = computed(() => {
 }
 
 .paper-rec-title a:hover {
+  color: $brand;
   text-decoration: underline;
 }
 
 .paper-rec-reason {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 13px;
-  color: var(--text-secondary, #aab1c0);
-  line-height: 1.5;
+  color: $text-secondary;
+  line-height: 1.55;
 }
 
 .paper-rec-meta {
   margin: 0;
   font-size: 12px;
-  color: var(--text-tertiary, #7a8194);
+  color: $text-muted;
 }
 
 .paper-rec-focus {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
+  padding: 8px 12px;
   font-size: 12px;
-  color: var(--text-tertiary, #7a8194);
+  color: $text-secondary;
+  background: $bg-secondary;
+  border-radius: $radius-sm;
   font-style: italic;
 }
 </style>

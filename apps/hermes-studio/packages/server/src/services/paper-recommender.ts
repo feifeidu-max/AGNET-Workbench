@@ -1,12 +1,14 @@
 /**
  * 论文推荐服务（定时）
  *
- * 依据：用户最近的 Hermes 对话/研究话题（焦点信号）作为检索 query，
- * 调用 llm-wiki 的 reading-candidates 接口（LLM 已按 query 排序的外部论文候选），
- * 归一化后持久化到 HERMES_WEB_UI_HOME/paper-recommendations.json。
+ * 依据：本地知识库（llm-wiki）自身已收录的论文作为“相似推荐”的锚点。
+ * 流程：列出 wiki/papers/*.md（文件名即论文标题 slug）→ 反解标题 →
+ * 提取领域关键词（point cloud / neural network / accelerator …）作为检索 query
+ * → 调用 llm-wiki 的 reading-candidates/search（OpenAlex/Crossref/arXiv 纯 HTTP，
+ * 无需 LLM）返回与知识库主题相似的外部论文。
  *
- * 推荐来源 = 尚未收录的外部论文（reading-candidates），与用户决策一致。
- * 相关性依据 = 最近对话/研究话题（焦点信号），与用户决策一致。
+ * 推荐来源 = 尚未收录的外部论文（reading-candidates）；相关性依据 = 本地知识库论文。
+ * 不再使用聊天记录作为焦点（避免推荐出与知识库无关的论文）。
  *
  * 调度：服务启动时延迟 30s 首跑（等 llm-wiki 起来），之后每 6 小时刷新一次。
  * 同时暴露手动 refresh（HTTP 端点），便于即时触发与排错。
@@ -16,15 +18,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { config } from '../config'
 import { llmWikiJson, LlmWikiApiError, publicKnowledgeErrorMessage } from './knowledge/llm-wiki-client'
-import { listSessionSummaries } from '../db/hermes/sessions-db'
 
 const RECOMMEND_INTERVAL_MS = 6 * 60 * 60 * 1000
 const FIRST_RUN_DELAY_MS = 30 * 1000
-const FOCUS_SESSION_LIMIT = 12
 const MAX_ITEMS = 6
-const MAX_FOCUS_LENGTH = 2000
+const MAX_FOCUS_LENGTH = 400
 const CANDIDATE_PROVIDERS = ['openalex', 'crossref', 'arxiv']
-const RESEARCH_PROFILES = ['default', 'research']
 
 export interface PaperRecommendation {
   id: string
@@ -41,6 +40,7 @@ export interface PaperRecommendationsPayload {
   status: 'pending' | 'success' | 'partial' | 'failed'
   generatedAt: string | null
   focus: string | null
+  paperCount: number
   nextRunAt: string | null
   count: number
   items: PaperRecommendation[]
@@ -87,26 +87,82 @@ function normalizeCandidate(value: unknown): PaperRecommendation | null {
 }
 
 /**
- * 从最近 Hermes 会话（default + research profile）提取研究话题作为焦点信号。
- * 任一 profile 的会话库不可用（sqlite 未就绪/文件缺失）时静默跳过，不影响其它 profile。
+ * 从本地知识库（llm-wiki）的 wiki/papers/*.md 反解论文标题。
+ * 文件名即论文标题的 slug（如 "flna-an-energy-efficient-point-cloud-...-1b797bdc.md"），
+ * 去掉末尾 hash 后按 "-" 拆词即可还原标题。
  */
-async function buildFocusSignal(): Promise<string | null> {
-  const titles: string[] = []
-  for (const profile of RESEARCH_PROFILES) {
-    try {
-      const sessions = await listSessionSummaries('hermes', FOCUS_SESSION_LIMIT, profile)
-      for (const session of sessions) {
-        const title = session?.title
-        if (typeof title === 'string' && title.trim()) titles.push(title.trim())
-      }
-    } catch {
-      // 该 profile 的会话库暂不可用，跳过。
-    }
+interface WikiFileNode {
+  name?: string
+  path?: string
+  isDir?: boolean
+  children?: WikiFileNode[] | null
+}
+
+const PAPER_SLUG_STOP = new Set([
+  'the', 'a', 'an', 'for', 'with', 'of', 'and', 'based', 'via', 'using', 'from',
+  'into', 'on', 'to', 'in', 'its', 'as', 'at', 'by', 'that', 'this', 'these',
+  'approach', 'method', 'new', 'novel', 'towards', 'exploring', 'potential',
+  'architecture', 'design', 'hardware', 'system', 'study', 'analysis', 'using',
+])
+
+function deslugify(slug: string): string {
+  return slug.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function collectPaperTitles(node: unknown, out: string[]): void {
+  if (!node || typeof node !== 'object') return
+  const n = node as Record<string, unknown>
+  const path = asString(n.path ?? n.name)
+  const isDir = n.isDir === true
+  if (isDir && Array.isArray(n.children)) {
+    for (const child of n.children as unknown[]) collectPaperTitles(child, out)
+  } else if (!isDir && /\.md$/i.test(path) && /(^|\/)papers\//i.test(path)) {
+    const name = (path.split('/').pop() || '').replace(/\.md$/i, '')
+    const slug = name.replace(/-[0-9a-f]{6,}$/i, '')
+    const title = deslugify(slug)
+    if (title) out.push(title)
   }
-  const unique = Array.from(new Set(titles)).slice(0, 10)
-  if (unique.length === 0) return null
-  const focus = unique.join('；')
-  return focus.length > MAX_FOCUS_LENGTH ? focus.slice(0, MAX_FOCUS_LENGTH) : focus
+}
+
+function extractDomainKeywords(titles: string[]): string {
+  const freq = new Map<string, number>()
+  for (const title of titles) {
+    const words = title
+      .toLowerCase()
+      .split(/[^a-z0-9]+/i)
+      .filter((w) => w.length >= 3 && !PAPER_SLUG_STOP.has(w))
+    for (const w of words) freq.set(w, (freq.get(w) || 0) + 1)
+  }
+  const top = [...freq.entries()]
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+    .slice(0, 10)
+    .map((e) => e[0])
+  const query = top.join(' ')
+  return query.length > MAX_FOCUS_LENGTH ? query.slice(0, MAX_FOCUS_LENGTH) : query
+}
+
+/**
+ * 以本地知识库自身论文为锚点，构建“相似推荐”的检索 query。
+ * 列出 wiki/papers/*.md → 反解标题 → 提取领域高频关键词。
+ * 知识库不可用或为空时返回 null（调用方会回退到预计算候选）。
+ */
+async function buildFocusFromKnowledgeBase(): Promise<{ query: string; paperCount: number } | null> {
+  try {
+    const payload = await llmWikiJson<Record<string, unknown>>(
+      '/projects/current/files?root=wiki&recursive=true&maxFiles=300',
+      {},
+      15_000,
+    )
+    const filesArr = Array.isArray(payload.files) ? (payload.files as unknown[]) : []
+    const titles: string[] = []
+    for (const node of filesArr) collectPaperTitles(node, titles)
+    if (titles.length === 0) return null
+    const query = extractDomainKeywords(titles)
+    if (!query) return null
+    return { query, paperCount: titles.length }
+  } catch {
+    return null
+  }
 }
 
 function emptyPayload(status: PaperRecommendationsPayload['status'] = 'pending'): PaperRecommendationsPayload {
@@ -114,6 +170,7 @@ function emptyPayload(status: PaperRecommendationsPayload['status'] = 'pending')
     status,
     generatedAt: null,
     focus: null,
+    paperCount: 0,
     nextRunAt: null,
     count: 0,
     items: [],
@@ -160,12 +217,14 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
   const generatedAt = new Date().toISOString()
   const nextRunAt = new Date(Date.now() + RECOMMEND_INTERVAL_MS).toISOString()
   try {
-    const focus = await buildFocusSignal()
-    const { items } = await fetchCandidates(focus)
+    const kb = await buildFocusFromKnowledgeBase()
+    const { items } = await fetchCandidates(kb?.query ?? null)
+    const paperCount = kb?.paperCount ?? 0
     const payload: PaperRecommendationsPayload = {
       status: items.length > 0 ? 'success' : 'partial',
       generatedAt,
-      focus,
+      focus: paperCount > 0 ? `本地知识库 · ${paperCount} 篇论文` : null,
+      paperCount,
       nextRunAt,
       count: items.length,
       items,
