@@ -129,6 +129,7 @@ export interface PaperRecommendation {
   url?: string | null
   provider?: string | null
   reason?: string | null
+  venue?: string | null
 }
 
 export interface PaperRecommendationsPayload {
@@ -138,6 +139,7 @@ export interface PaperRecommendationsPayload {
   paperCount: number
   nextRunAt: string | null
   count: number
+  topVenueOnly: boolean
   items: PaperRecommendation[]
   error?: string | null
 }

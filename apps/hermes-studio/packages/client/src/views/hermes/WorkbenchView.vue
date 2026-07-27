@@ -87,7 +87,7 @@ const featureCards = computed<FeatureCard[]>(() => {
     {
       key: 'papers',
       title: '论文推荐',
-      desc: '依据你最近的对话与研究方向，定时推荐相关的待读论文。',
+      desc: '依据本地知识库，定时推荐相似的顶会论文。',
       meta: summary.value?.paperRecommendations?.count ? `已推荐 ${summary.value.paperRecommendations.count} 篇` : '每 6 小时刷新',
       to: { name: 'hermes.knowledge', query: { tab: 'candidates' } },
       icon: 'papers',
@@ -269,6 +269,7 @@ const recStatusLabel = computed(() => {
               <NTag :type="summary.paperRecommendations && summary.paperRecommendations.status === 'success' ? 'success' : (summary.paperRecommendations && summary.paperRecommendations.status === 'failed' ? 'error' : 'warning')" size="small" :bordered="false">
                 {{ recStatusLabel }}
               </NTag>
+              <NTag v-if="summary.paperRecommendations.topVenueOnly" type="error" size="small" :bordered="false">仅顶会</NTag>
               <NButton size="tiny" :disabled="recommending" :aria-busy="recommending" @click="refreshRecs">
                 <template #icon>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -293,7 +294,9 @@ const recStatusLabel = computed(() => {
               <h4 class="paper-rec-title">
                 <a v-if="item.url" :href="item.url" target="_blank" rel="noopener">{{ item.title }}</a>
                 <template v-else>{{ item.title }}</template>
+                <NTag v-if="item.venue" type="error" size="tiny" :bordered="false" class="paper-rec-venue-tag">顶会</NTag>
               </h4>
+              <p v-if="item.venue" class="paper-rec-venue">{{ item.venue }}</p>
               <p v-if="item.reason" class="paper-rec-reason">{{ item.reason }}</p>
               <p class="paper-rec-meta">
                 <span v-if="item.authors && item.authors.length">作者：{{ item.authors.slice(0, 3).join('、') }}{{ item.authors.length > 3 ? ' 等' : '' }}</span>
@@ -304,10 +307,10 @@ const recStatusLabel = computed(() => {
           </div>
           <NEmpty
             v-else
-            :description="summary.paperRecommendations && summary.paperRecommendations.error ? summary.paperRecommendations.error : '暂无可推荐的外部论文，稍后自动刷新'"
+            :description="summary.paperRecommendations && summary.paperRecommendations.error ? summary.paperRecommendations.error : '暂无可推荐的外部顶会论文，稍后自动刷新'"
           />
           <p v-if="summary.paperRecommendations && summary.paperRecommendations.focus" class="paper-rec-focus">
-            依据本地知识库（{{ summary.paperRecommendations.paperCount }} 篇已收录论文）相似推荐
+            依据本地知识库（{{ summary.paperRecommendations.paperCount }} 篇已收录论文）相似推荐 · 仅顶会论文
           </p>
         </section>
 
@@ -391,6 +394,19 @@ const recStatusLabel = computed(() => {
 .paper-rec-title a:hover {
   color: $brand;
   text-decoration: underline;
+}
+
+.paper-rec-venue-tag {
+  margin-left: 8px;
+  vertical-align: middle;
+  font-weight: 600;
+}
+
+.paper-rec-venue {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: $text-muted;
 }
 
 .paper-rec-reason {

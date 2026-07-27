@@ -10,6 +10,7 @@ Set-StrictMode -Version 2.0
 
 $startupTaskName = "AGNET Local Workbench"
 $backupTaskName = "AGNET Daily Backup"
+$paperTaskName = "AGNET Paper Recommender"
 
 try {
     $scheduledTasks = Get-Module -ListAvailable -Name ScheduledTasks | Select-Object -First 1
@@ -19,7 +20,7 @@ try {
     Import-Module ScheduledTasks
 
     if ($Unregister) {
-        foreach ($taskName in @($startupTaskName, $backupTaskName)) {
+        foreach ($taskName in @($startupTaskName, $backupTaskName, $paperTaskName)) {
             if ($null -ne (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
                 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
                 Write-Host "Removed scheduled task: $taskName"
@@ -49,6 +50,14 @@ try {
 
     Register-ScheduledTask -TaskName $startupTaskName -Action $startupAction -Trigger $startupTrigger -Principal $principal -Settings $startupSettings -Description "Start loopback-only AGNET services after this user signs in." -Force | Out-Null
     Register-ScheduledTask -TaskName $backupTaskName -Action $backupAction -Trigger $backupTrigger -Principal $principal -Settings $backupSettings -Description "Create a verified daily AGNET backup and retain the configured number of copies." -Force | Out-Null
+
+    $paperScript = Join-Path $PSScriptRoot "Refresh-PaperRecommendations.ps1"
+    $paperArguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -Port {1}' -f $paperScript, [int]$config.StudioPort
+    $paperAction = New-ScheduledTaskAction -Execute $powerShellExe -Argument $paperArguments -WorkingDirectory (Get-AGNETRepositoryRoot)
+    # 每 6 小时触发一次（与 Studio 内置调度一致），无限重复。
+    $paperTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration ([TimeSpan]::MaxValue)
+    $paperSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+    Register-ScheduledTask -TaskName $paperTaskName -Action $paperAction -Trigger $paperTrigger -Principal $principal -Settings $paperSettings -Description "Periodically refresh top-conference paper recommendations derived from the local knowledge-base wiki." -Force | Out-Null
 
     Write-Host "Registered: $startupTaskName"
     Write-Host "Registered: $backupTaskName at $($config.DailyBackupTime)"

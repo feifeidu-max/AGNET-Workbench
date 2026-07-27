@@ -24,6 +24,39 @@ const FIRST_RUN_DELAY_MS = 30 * 1000
 const MAX_ITEMS = 6
 const MAX_FOCUS_LENGTH = 400
 const CANDIDATE_PROVIDERS = ['openalex', 'crossref', 'arxiv']
+// 一次检索多拉一些候选，再做“顶会”过滤，保证最终能凑满 MAX_ITEMS。
+const CANDIDATE_FETCH_LIMIT = 30
+// 候选本身不含 venue 字段，需要根据 DOI 向 Crossref/OpenAlex 反查会议名称，
+// 再按顶会白名单过滤。这里覆盖与本项目（点云/神经网络加速器）相关的计算机顶会，
+// 也包含 ML/视觉/机器人/系统/安全/网络等通用 CS 顶会。
+const TOP_CONFERENCE_KEYWORDS = [
+  // 体系结构 / EDA / 硬件加速
+  'isca', 'micro', 'hpca', 'asplos', 'dac', 'iccad', 'fpga', 'fpl', 'fpt', 'fccm',
+  'date', 'case', 'iscas', 'nocs', 'pact', 'cgo', 'esweek', 'rtas', 'rtss', 'ispass',
+  'iiswc', 'asap', 'codes', 'isss', 'samos', 'heap', 'sc', 'supercomputing', 'hotchips',
+  // 机器学习 / AI
+  'neurips', 'nips', 'icml', 'iclr', 'aaai', 'ijcai', 'uai', 'aistats', 'colt',
+  // 计算机视觉 / 3D
+  'cvpr', 'iccv', 'eccv', 'wacv', 'bmvc', '3dv',
+  // 机器人
+  'icra', 'iros', 'rss', 'corl', 'humanoids',
+  // NLP
+  'acl', 'emnlp', 'naacl', 'coling', 'tacl',
+  // 图形学
+  'siggraph',
+  // 系统
+  'osdi', 'sosp', 'nsdi', 'atc', 'eurosys', 'fast', 'socc', 'middleware',
+  // 安全
+  'usenix', 'ccs', 'oakland', 'ndss', 'acsac', 'raid',
+  // 网络
+  'sigcomm', 'mobicom', 'infocom', 'conext', 'imc', 'mobicom',
+  // 数据库 / 数据挖掘 / 软件工程
+  'sigmod', 'vldb', 'icde', 'kdd', 'www', 'icse', 'ase', 'fse', 'issta',
+  // 语音 / 信号
+  'icassp', 'interspeech',
+]
+// 反查到的 venue -> 是否顶会 的进程内缓存，避免同一次/跨次刷新重复打外部 API。
+const VENUE_CACHE = new Map<string, { venue: string | null; resolved: boolean }>()
 
 export interface PaperRecommendation {
   id: string
@@ -34,6 +67,8 @@ export interface PaperRecommendation {
   url: string | null
   provider: string | null
   reason: string | null
+  venue: string | null
+  doi: string | null
 }
 
 export interface PaperRecommendationsPayload {
@@ -43,6 +78,7 @@ export interface PaperRecommendationsPayload {
   paperCount: number
   nextRunAt: string | null
   count: number
+  topVenueOnly: boolean
   items: PaperRecommendation[]
   error: string | null
 }
@@ -83,7 +119,81 @@ function normalizeCandidate(value: unknown): PaperRecommendation | null {
     url: asNullableString(item.url),
     provider: asNullableString(item.provider ?? item.source),
     reason: asNullableString(item.reason ?? item.recommendedReason ?? item.recommended_reason),
+    venue: null,
+    doi: asNullableString(item.doi),
   }
+}
+
+/**
+ * 判断一段会议/期刊名称是否属于“顶会”。采用词边界匹配顶会缩写白名单，
+ * 避免 "scalability" 误命中 "sc" 之类。
+ */
+function isTopVenue(venue: string | null): boolean {
+  if (!venue) return false
+  const text = venue.toLowerCase()
+  return TOP_CONFERENCE_KEYWORDS.some((keyword) => {
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text)
+  })
+}
+
+/**
+ * 根据 DOI 反查论文发表的会议/期刊名称。
+ * 优先 Crossref（container-title / event），失败再试 OpenAlex（primary_location.source.display_name）。
+ * 结果进程内缓存，避免一次刷新内重复请求。无 DOI 或查询失败返回 null。
+ */
+async function enrichVenue(doi: string | undefined | null): Promise<{ venue: string | null; resolved: boolean }> {
+  if (!doi || !/^10\./.test(doi)) return { venue: null, resolved: true }
+  const cached = VENUE_CACHE.get(doi)
+  if (cached !== undefined) return cached
+  const lookup = async (url: string): Promise<{ venue: string | null; resolved: boolean }> => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 4000)
+    timeout.unref?.()
+    try {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'AGNET-PaperRecommender/1.0 (mailto:agent@agnet.local)' },
+        signal: controller.signal,
+      })
+      if (!response.ok) return { venue: null, resolved: true }
+      const data = (await response.json()) as Record<string, unknown>
+      const message = (data.message ?? data) as Record<string, unknown>
+      return { venue: extractVenueName(message), resolved: true }
+    } catch {
+      return { venue: null, resolved: false }
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  const crossref = await lookup(`https://api.crossref.org/works/${encodeURIComponent(doi)}`)
+  if (crossref.resolved && crossref.venue) {
+    VENUE_CACHE.set(doi, crossref)
+    return crossref
+  }
+  const openalex = await lookup(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`)
+  VENUE_CACHE.set(doi, openalex)
+  return openalex
+}
+
+/**
+ * 从 Crossref/OpenAlex 的 work 元数据里挑一个最能代表“会议/期刊”的名称：
+ * Crossref 优先 container-title，其次 event.name；OpenAlex 取 primary_location.source.display_name。
+ */
+function extractVenueName(message: Record<string, unknown>): string | null {
+  const container = message['container-title']
+  if (Array.isArray(container) && typeof container[0] === 'string' && container[0].trim()) {
+    return container[0].trim()
+  }
+  const event = message.event as Record<string, unknown> | undefined
+  if (event && typeof event.name === 'string' && (event.name as string).trim()) {
+    return (event.name as string).trim()
+  }
+  const primary = message['primary_location'] as Record<string, unknown> | undefined
+  const source = primary?.source as Record<string, unknown> | undefined
+  if (source && typeof source.display_name === 'string' && (source.display_name as string).trim()) {
+    return (source.display_name as string).trim()
+  }
+  return null
 }
 
 /**
@@ -173,6 +283,7 @@ function emptyPayload(status: PaperRecommendationsPayload['status'] = 'pending')
     paperCount: 0,
     nextRunAt: null,
     count: 0,
+    topVenueOnly: false,
     items: [],
     error: null,
   }
@@ -188,6 +299,8 @@ function arrayFromResponse(value: unknown, key: string): unknown[] {
 }
 
 async function fetchCandidates(focus: string | null): Promise<{ items: PaperRecommendation[]; viaSearch: boolean }> {
+  let raw: unknown[] = []
+  let viaSearch = false
   if (focus) {
     try {
       const payload = await llmWikiJson<Record<string, unknown>>('/projects/current/reading-candidates/search', {
@@ -195,22 +308,41 @@ async function fetchCandidates(focus: string | null): Promise<{ items: PaperReco
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: focus, providers: CANDIDATE_PROVIDERS }),
       }, 90_000)
-      const items = arrayFromResponse(payload, 'candidates')
-        .map(normalizeCandidate)
-        .filter((item): item is PaperRecommendation => item !== null)
-        .slice(0, MAX_ITEMS)
-      if (items.length > 0) return { items, viaSearch: true }
+      raw = arrayFromResponse(payload, 'candidates')
+      viaSearch = raw.length > 0
     } catch (error) {
       if (!(error instanceof LlmWikiApiError)) throw error
       // 搜索失败（如 llm-wiki 未配置外部 LLM）→ 兜底读预计算候选。
     }
   }
-  const payload = await llmWikiJson<Record<string, unknown>>('/projects/current/reading-candidates')
-  const items = arrayFromResponse(payload, 'candidates')
+  if (raw.length === 0) {
+    const payload = await llmWikiJson<Record<string, unknown>>('/projects/current/reading-candidates')
+    raw = arrayFromResponse(payload, 'candidates')
+    viaSearch = false
+  }
+
+  const normalized = raw
     .map(normalizeCandidate)
     .filter((item): item is PaperRecommendation => item !== null)
+    .slice(0, CANDIDATE_FETCH_LIMIT)
+
+  // 反查每篇候选的发表会议/期刊，并标记是否为顶会。
+  const enriched = await Promise.all(
+    normalized.map(async (item) => {
+      const { venue, resolved } = await enrichVenue(item.doi ?? undefined)
+      return { ...item, venue, enrichResolved: resolved }
+    }),
+  )
+  const topVenue = enriched.filter((item) => isTopVenue(item.venue))
+  // venue 反查整体失败（网络/限流）时退化为不过滤，避免长期空白；
+  // 若已成功解析但无顶会命中，则严格只返回顶会（可能为空）。
+  const allEnrichFailed = enriched.length > 0 && enriched.every((item) => !item.enrichResolved)
+  const pool: Array<PaperRecommendation & { enrichResolved: boolean }> =
+    topVenue.length > 0 ? topVenue : allEnrichFailed ? enriched : []
+  const chosen = pool
     .slice(0, MAX_ITEMS)
-  return { items, viaSearch: false }
+    .map(({ enrichResolved, ...rest }) => rest)
+  return { items: chosen, viaSearch }
 }
 
 export async function generateRecommendations(): Promise<PaperRecommendationsPayload> {
@@ -223,12 +355,13 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
     const payload: PaperRecommendationsPayload = {
       status: items.length > 0 ? 'success' : 'partial',
       generatedAt,
-      focus: paperCount > 0 ? `本地知识库 · ${paperCount} 篇论文` : null,
+      focus: paperCount > 0 ? `本地知识库 · ${paperCount} 篇论文 · 顶会优先` : null,
       paperCount,
       nextRunAt,
       count: items.length,
+      topVenueOnly: true,
       items,
-      error: items.length === 0 ? '暂无可推荐的外部论文候选' : null,
+      error: items.length === 0 ? '暂无可推荐的外部顶会论文候选' : null,
     }
     persist(payload)
     return payload
