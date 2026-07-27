@@ -1,6 +1,6 @@
 import { readFile } from 'fs/promises'
 import { join } from 'path'
-import { getActiveProfileName, getProfileDir } from '../../services/hermes/hermes-profile'
+import { getActiveProfileName, getProfileDir, listProfileNamesFromDisk } from '../../services/hermes/hermes-profile'
 import {
   fetchProviderModels,
   readConfigYamlForProfile,
@@ -8,6 +8,7 @@ import {
   updateConfigYamlForProfile,
 } from '../../services/config-helpers'
 import { getCompatibleCustomProviders } from '../../services/hermes/custom-providers-compat'
+import { logger } from '../../services/logger'
 
 export const SENSENOVA_PROVIDER = 'custom:sensenova'
 export const SENSENOVA_NAME = 'sensenova'
@@ -41,10 +42,6 @@ function normalizeBaseUrl(value: unknown): string {
     parsed.pathname = '/v1'
   }
   return parsed.toString().replace(/\/+$/, '')
-}
-
-function providerKeyForName(name: string): string {
-  return `custom:${name.trim().toLowerCase().replace(/\s+/g, '-')}`
 }
 
 function maskSecret(value: string): string {
@@ -102,6 +99,84 @@ function normalizeModels(value: unknown, selectedModel: string): string[] {
     ...values.map(item => String(item || '').trim()).filter(Boolean),
     selectedModel,
   ])).slice(0, 200)
+}
+
+/**
+ * A custom_provider is the SenseNova base model provider if its name,
+ * provider_key, or base_url references "sensenova". Research profiles may
+ * store it as `name: https://token.sensenova.cn` rather than `sensenova`,
+ * so we match by base_url too.
+ */
+function isSensenovaProvider(entry: any): boolean {
+  if (!entry || typeof entry !== 'object') return false
+  const name = String(entry.name || '').trim().toLowerCase()
+  const key = String(entry.provider_key || entry.key || '').trim().toLowerCase()
+  const base = String(entry.base_url || '').trim().toLowerCase()
+  return (
+    name === SENSENOVA_NAME ||
+    key === SENSENOVA_NAME ||
+    name.includes('sensenova') ||
+    base.includes('sensenova')
+  )
+}
+
+/**
+ * Write the SenseNova base-model configuration for a single profile:
+ * the API key goes to that profile's `.env` (SENSENOVA_API_KEY) and the
+ * provider entry + model section go to its `config.yaml`. Any plaintext
+ * `api_key` in the YAML is removed so the secret lives only in `.env`.
+ */
+async function applySensenovaToProfile(
+  targetProfile: string,
+  opts: { model: string; baseUrl: string; models: string[]; apiMode: ProviderApiMode; apiKey: string },
+): Promise<void> {
+  const { model, baseUrl, models, apiMode, apiKey } = opts
+  await saveEnvValueForProfile(targetProfile, SENSENOVA_API_KEY_ENV, apiKey)
+  await updateConfigYamlForProfile(targetProfile, (config) => {
+    if (!config.model || typeof config.model !== 'object' || Array.isArray(config.model)) config.model = {}
+    const entry = {
+      name: SENSENOVA_NAME,
+      base_url: baseUrl,
+      key_env: SENSENOVA_API_KEY_ENV,
+      model,
+      api_mode: apiMode,
+      models: Object.fromEntries(models.map((item) => [item, {}])),
+    }
+
+    if (Array.isArray(config.custom_providers)) {
+      const existingEntry = config.custom_providers.find(isSensenovaProvider)
+      if (existingEntry) {
+        Object.assign(existingEntry, entry)
+        delete existingEntry.api_key
+      } else {
+        config.custom_providers.push(entry)
+      }
+    } else if (
+      config.providers && typeof config.providers === 'object' && !Array.isArray(config.providers) &&
+      (config.providers as any).sensenova && typeof (config.providers as any).sensenova === 'object'
+    ) {
+      const existingEntry = (config.providers as any).sensenova
+      Object.assign(existingEntry, {
+        name: SENSENOVA_NAME,
+        api: baseUrl,
+        base_url: baseUrl,
+        key_env: SENSENOVA_API_KEY_ENV,
+        default_model: model,
+        models: Object.fromEntries(models.map((item) => [item, {}])),
+        transport: apiMode,
+      })
+      delete existingEntry.api_key
+    } else {
+      config.custom_providers = [entry]
+    }
+
+    config.model.default = model
+    config.model.provider = SENSENOVA_PROVIDER
+    delete config.model.base_url
+    delete config.model.api_key
+    delete config.model.name
+    return config
+  })
 }
 
 async function resolveConfig(profile: string) {
@@ -170,48 +245,19 @@ export async function saveConfig(ctx: any) {
       return
     }
 
-    await saveEnvValueForProfile(profile, SENSENOVA_API_KEY_ENV, nextKey)
-    await updateConfigYamlForProfile(profile, (config) => {
-      if (!config.model || typeof config.model !== 'object' || Array.isArray(config.model)) config.model = {}
-      const entry = {
-        name: SENSENOVA_NAME,
-        base_url: baseUrl,
-        key_env: SENSENOVA_API_KEY_ENV,
-        model,
-        api_mode: apiMode,
-        models: Object.fromEntries(models.map(item => [item, {}])),
+    const payload = { model, baseUrl, models, apiMode, apiKey: nextKey }
+    // Persist for the profile the user edited...
+    await applySensenovaToProfile(profile, payload)
+    // ...and mirror it to every other profile so the base-model
+    // configuration stays in sync across profiles without extra setup.
+    for (const other of listProfileNamesFromDisk()) {
+      if (other === profile) continue
+      try {
+        await applySensenovaToProfile(other, payload)
+      } catch (syncErr: any) {
+        logger.warn(syncErr, 'SyncSenseNova: failed to apply base-model config to profile "%s"', other)
       }
-
-      if (Array.isArray(config.custom_providers)) {
-        const existingEntry = config.custom_providers.find((item: any) => providerKeyForName(item?.name || '') === SENSENOVA_PROVIDER)
-        if (existingEntry) {
-          Object.assign(existingEntry, entry)
-          delete existingEntry.api_key
-        }
-        else config.custom_providers.push(entry)
-      } else if (config.providers && typeof config.providers === 'object' && !Array.isArray(config.providers) && config.providers.sensenova && typeof config.providers.sensenova === 'object') {
-        const existingEntry = config.providers.sensenova
-        Object.assign(existingEntry, {
-          name: SENSENOVA_NAME,
-          api: baseUrl,
-          base_url: baseUrl,
-          key_env: SENSENOVA_API_KEY_ENV,
-          default_model: model,
-          models: Object.fromEntries(models.map(item => [item, {}])),
-          transport: apiMode,
-        })
-        delete existingEntry.api_key
-      } else {
-        config.custom_providers = [entry]
-      }
-
-      config.model.default = model
-      config.model.provider = SENSENOVA_PROVIDER
-      delete config.model.base_url
-      delete config.model.api_key
-      delete config.model.name
-      return config
-    })
+    }
 
     ctx.body = {
       success: true,
