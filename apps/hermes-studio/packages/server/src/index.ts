@@ -15,6 +15,7 @@ import { setupTerminalWebSocket } from './routes/hermes/terminal'
 import { setupKanbanEventsWebSocket } from './routes/hermes/kanban-events'
 import { startVersionCheck } from './routes/health'
 import { registerRoutes } from './routes'
+import { schedulePaperRecommendations } from './services/paper-recommender'
 import { setGroupChatServer } from './routes/hermes/group-chat'
 import { setChatRunServer } from './routes/hermes/chat-run'
 import { GroupChatServer } from './services/hermes/group-chat'
@@ -317,6 +318,9 @@ export async function bootstrap() {
 
   // Register all routes (handles auth internally)
   registerRoutes(app, userAuthMiddleware)
+
+  // 论文推荐：启动时延迟首跑 + 每 6 小时定时刷新（依据最近对话话题检索 llm-wiki 外部论文候选）。
+  schedulePaperRecommendations()
   console.log('[bootstrap] routes registered')
 
   // SPA fallback

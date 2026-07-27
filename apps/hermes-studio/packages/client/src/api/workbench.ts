@@ -18,6 +18,7 @@ export interface WorkbenchSummary {
     serviceOk: boolean
     todayPapers?: number
   }
+  paperRecommendations?: PaperRecommendationsPayload
   services: ServiceHealth[]
 }
 
@@ -117,6 +118,27 @@ export interface KnowledgeProject {
   name: string
   path: string
   current: boolean
+}
+
+export interface PaperRecommendation {
+  id: string
+  title: string
+  authors: string[]
+  year: number | null
+  abstract?: string | null
+  url?: string | null
+  provider?: string | null
+  reason?: string | null
+}
+
+export interface PaperRecommendationsPayload {
+  status: 'pending' | 'success' | 'partial' | 'failed'
+  generatedAt: string | null
+  focus: string | null
+  nextRunAt: string | null
+  count: number
+  items: PaperRecommendation[]
+  error?: string | null
 }
 
 export interface KnowledgeWorkspace {
@@ -251,6 +273,16 @@ function normalizeKnowledgeProject(value: unknown): KnowledgeProject {
 
 export async function fetchWorkbenchSummary(): Promise<WorkbenchSummary> {
   return request<WorkbenchSummary>('/api/workbench/summary')
+}
+
+export async function fetchPaperRecommendations(): Promise<PaperRecommendationsPayload> {
+  return request<PaperRecommendationsPayload>('/api/workbench/paper-recommendations')
+}
+
+export async function refreshPaperRecommendations(): Promise<PaperRecommendationsPayload> {
+  return request<PaperRecommendationsPayload>('/api/workbench/paper-recommendations/refresh', {
+    method: 'POST',
+  })
 }
 
 export async function listKnowledgeDrafts(): Promise<KnowledgeDraft[]> {
