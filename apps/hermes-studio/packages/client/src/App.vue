@@ -11,7 +11,7 @@ import { useAppStore } from '@/stores/hermes/app'
 import AuthEventListener from '@/components/auth/AuthEventListener.vue'
 import { desktopBridge } from '@/utils/desktop-bridge'
 
-const AppSidebar = defineAsyncComponent(async () => (await import('@/components/layout/AppSidebar.vue')).default)
+const AppTopNav = defineAsyncComponent(async () => (await import('@/components/layout/AppTopNav.vue')).default)
 const DesktopTitleBar = defineAsyncComponent(async () => (await import('@/components/layout/DesktopTitleBar.vue')).default)
 const SessionSearchModal = defineAsyncComponent(async () => (await import('@/components/hermes/chat/SessionSearchModal.vue')).default)
 const DefaultCredentialPrompt = defineAsyncComponent(async () => (await import('@/components/auth/DefaultCredentialPrompt.vue')).default)
@@ -28,11 +28,7 @@ const themeOverrides = computed(() => getThemeOverrides(isDark.value, isComic.va
 const naiveTheme = computed(() => isDark.value ? darkTheme : null)
 
 const isLoginPage = computed(() => route.name === 'login')
-const usesPageSidebar = computed(() =>
-  ['hermes.chat', 'hermes.session', 'hermes.history', 'hermes.historySession', 'hermes.globalAgent', 'hermes.globalAgentSession', 'hermes.groupChat', 'hermes.groupChatRoom', 'hermes.workflow'].includes(route.name as string),
-)
-const showAppSidebar = computed(() => !isLoginPage.value && !usesPageSidebar.value)
-const showMobileMenuButton = computed(() => !isLoginPage.value && (showAppSidebar.value || usesPageSidebar.value))
+const showTopNav = computed(() => !isLoginPage.value && !isDesktopPetRoute.value)
 
 const nodeVersionLow = computed(() => {
   const v = appStore.nodeVersion
@@ -47,14 +43,6 @@ const hasDesktopTitleBar = computed(() => {
   const platform = desktopBridge()?.platform
   return isDesktopShell.value && (platform === 'darwin' || platform === 'win32')
 })
-
-function handleMobileMenuClick() {
-  if (usesPageSidebar.value) {
-    window.dispatchEvent(new CustomEvent('hermes:open-page-sidebar'))
-    return
-  }
-  appStore.toggleSidebar()
-}
 
 watch(isLoginPage, (loginPage) => {
   if (loginPage) {
@@ -86,16 +74,12 @@ useKeyboard()
             <div v-if="nodeVersionLow" class="node-warning-bar">
               {{ t('sidebar.nodeVersionWarning', { version: appStore.nodeVersion }) }}
             </div>
-            <div class="app-layout" :class="{ 'no-sidebar': isLoginPage || !showAppSidebar }">
-              <button v-if="showMobileMenuButton" class="hamburger-btn" @click="handleMobileMenuClick">
-                <img src="/logo.png" alt="Menu" style="width: 24px; height: 24px;" />
-              </button>
-              <div v-if="!isLoginPage && showAppSidebar && appStore.sidebarOpen" class="mobile-backdrop" @click="appStore.closeSidebar" />
-              <AppSidebar v-if="!isLoginPage && showAppSidebar" />
-              <main class="app-main">
-                <router-view />
-              </main>
-            </div>
+          <AppTopNav v-if="showTopNav" />
+          <div class="app-layout">
+            <main class="app-main">
+              <router-view />
+            </main>
+          </div>
           </div>
           <WebPet v-if="showWebPet" />
           <SessionSearchModal v-if="!isDesktopPetRoute && sessionSearchOpen" />
@@ -160,5 +144,23 @@ useKeyboard()
   border-bottom: 1px solid #fde68a;
   text-align: center;
   line-height: 1.4;
+}
+</style>
+
+<style lang="scss">
+:root {
+  --ph-bg: #fafaf7;
+  --ph-card: #ffffff;
+  --ph-navy: #003b5c;
+  --ph-text-dark: #1a1a1a;
+  --ph-text-medium: #666666;
+  --ph-text-light: #999999;
+  --ph-text-abstract: #555555;
+  --ph-section-bg: #f9f9fb;
+  --ph-footer: #1a1a1a;
+  --ph-border: #e6e5d6;
+  --ph-border-light: #f0ebda;
+  --ph-font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --ph-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 </style>

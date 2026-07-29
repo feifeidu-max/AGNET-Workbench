@@ -12,6 +12,11 @@ const router = createRouter({
     },
     {
       path: '/',
+      name: 'hermes.paperhub',
+      component: () => import('@/views/hermes/PaperHubView.vue'),
+    },
+    {
+      path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
       meta: { public: true },
@@ -24,6 +29,11 @@ const router = createRouter({
     {
       path: '/hermes/workbench',
       name: 'hermes.workbench',
+      component: () => import('@/views/hermes/DataLibraryView.vue'),
+    },
+    {
+      path: '/hermes/personal-workbench',
+      name: 'hermes.personalWorkbench',
       component: () => import('@/views/hermes/WorkbenchView.vue'),
     },
     {
@@ -197,9 +207,9 @@ async function ensureDesktopAuth(): Promise<void> {
 router.beforeEach(async (to, _from, next) => {
   await ensureDesktopAuth()
 
-  // The login page is never shown — always enter the workbench.
+  // The login page is never shown — always enter the PaperHub home.
   if (to.name === 'login') {
-    next({ path: '/hermes/workbench' })
+    next({ name: 'hermes.paperhub' })
     return
   }
 
@@ -210,7 +220,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (to.meta.requiresSuperAdmin && !isStoredSuperAdmin()) {
-    next({ name: 'hermes.workbench' })
+    next({ name: 'hermes.paperhub' })
     return
   }
 
