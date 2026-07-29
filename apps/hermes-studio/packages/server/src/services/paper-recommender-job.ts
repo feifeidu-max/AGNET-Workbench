@@ -1,30 +1,24 @@
 /**
- * 将“论文推荐（本地知识库·顶会优先）”注册为 Hermes 的 cron 任务，
- * 使其出现在工作台 Jobs 页面（/#/hermes/jobs）。
+ * 将“论文推荐（本地知识库·顶会优先·最新优先）”注册为 Hermes 的 cron 任务（agent 模式），
+ * 使其出现在工作台 Jobs 页面（/#/hermes/jobs），且由 Hermes 本身触发与执行：
+ * Hermes 读取 llm-wiki 的 wiki（llm_wiki_search / llm_wiki_chat(web)），理解当前研究主题，
+ * 联网检索与知识库相似、最近发表的顶会论文，并回写推荐结果。
  *
  * 设计：
- * - 真正的刷新由 studio 内置定时器（paper-recommender.schedulePaperRecommendations，
- *   每 6h）兜底执行，保证刷新一定会发生，不依赖 cron 守卫（cron tick）是否在运行。
- * - 本模块负责：(1) 在活跃 profile（及 default 兜底）的 cron/jobs.json 中“种入”
- *   该任务（幂等），使其在前台 Jobs 页面可见、可暂停/恢复/手动运行；
- *   (2) 每次刷新后回写该任务的运行元数据（last_run_at / last_status /
- *   run_count / last_error），让 Jobs 卡片显示真实运行历史。
- * - 任务以 no-agent 脚本方式定义（~/.hermes/scripts/refresh_paper_recommendations.py），
- *   若用户的 cron 守卫（hermes cron tick）在运行，也会由 cron 直接触发刷新。
+ * - 任务以 agent prompt 方式定义：cron 守卫（hermes cron tick）或在 Jobs 页面手动运行时，
+ *   Hermes 会真正“自己去网上搜”，而不是只打一通脚本。
+ * - 为保证刷新一定会发生（即使 cron 守卫未运行），studio 内置定时器
+ *   （paper-recommender.schedulePaperRecommendations，每 6h）仍作为兜底执行同一套引擎。
+ * - 回写：每次刷新（无论引擎还是 agent）后调用 recordPaperRecommenderRun，更新任务的
+ *   last_run_at / last_status / run_count / last_error，使 Jobs 卡片显示真实运行历史。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { detectHermesRootHome } from './hermes/hermes-path'
 import { getActiveProfileName, getProfileDir, listProfileNamesFromDisk } from './hermes/hermes-profile'
 
 export const PAPER_RECOMMENDER_JOB_ID = 'paper-recommender-kb'
-const JOB_SCRIPT_NAME = 'refresh_paper_recommendations.py'
 const SCHEDULE = '0 */6 * * *' // 每 6 小时
 const STUDIO_PORT = 8648
-
-function jobScriptPath(): string {
-  return join(detectHermesRootHome(), 'scripts', JOB_SCRIPT_NAME)
-}
 
 function cronJobsPathForProfile(profile: string): string {
   return join(getProfileDir(profile), 'cron', 'jobs.json')
@@ -50,21 +44,101 @@ function saveJobsFile(path: string, raw: any, jobs: any[], asArray: boolean): vo
   } catch { /* 忽略写入失败，不影响推荐刷新 */ }
 }
 
+function cronSchedule(value: unknown): Record<string, string> {
+  const text = typeof value === 'string'
+    ? value.trim()
+    : value && typeof value === 'object'
+      ? String((value as any).expr || (value as any).display || '').trim()
+      : ''
+  return { kind: 'cron', expr: text || SCHEDULE, display: text || SCHEDULE }
+}
+
+/** Convert the pre-0.18 Studio job shape into Hermes' persisted cron schema. */
+function normalizeManagedJob(job: any): any {
+  const id = String(job?.id || job?.job_id || PAPER_RECOMMENDER_JOB_ID)
+  const schedule = cronSchedule(job?.schedule)
+  const repeat = job?.repeat && typeof job.repeat === 'object'
+    ? { times: job.repeat.times ?? null, completed: Number(job.repeat.completed) || 0 }
+    : { times: null, completed: 0 }
+  return {
+    ...job,
+    id,
+    job_id: id,
+    prompt: typeof job?.prompt === 'string' ? job.prompt : JOB_PROMPT,
+    skills: Array.isArray(job?.skills) ? job.skills : [],
+    skill: job?.skill ?? null,
+    model: job?.model ?? null,
+    provider: job?.provider ?? null,
+    base_url: job?.base_url ?? null,
+    script: job?.script ?? null,
+    no_agent: job?.no_agent === true,
+    context_from: job?.context_from ?? null,
+    schedule,
+    schedule_display: schedule.display,
+    repeat,
+    enabled: job?.enabled !== false,
+    state: job?.state || (job?.enabled === false ? 'paused' : 'scheduled'),
+    paused_at: job?.paused_at ?? null,
+    paused_reason: job?.paused_reason ?? null,
+    created_at: job?.created_at || new Date().toISOString(),
+    next_run_at: job?.next_run_at ?? null,
+    last_run_at: job?.last_run_at ?? null,
+    last_status: job?.last_status ?? null,
+    last_error: job?.last_error ?? null,
+    last_delivery_error: job?.last_delivery_error ?? null,
+    deliver: typeof job?.deliver === 'string' && job.deliver.trim() ? job.deliver : 'local',
+    origin: job?.origin && typeof job.origin === 'object' ? job.origin : null,
+    enabled_toolsets: Array.isArray(job?.enabled_toolsets) ? job.enabled_toolsets : null,
+    workdir: job?.workdir ?? null,
+    profile: job?.profile ?? null,
+  }
+}
+
+const JOB_PROMPT = [
+  '你是论文推荐守护任务。请基于本地知识库（llm-wiki）的 wiki 内容理解当前研究主题，',
+  '然后使用以下工具联网检索：llm_wiki_search（本地证据不足时会自动检索 OpenAlex/Crossref/arXiv），',
+  '以及 llm_wiki_chat（设置 web:true）做更深度的网络搜索。',
+  '目标：只找数据工程、数据平台、数据采集、数据存储、数据计算、数据治理、数据质量或数据安全方向的论文，',
+  '排除点云、体素、近存计算和神经网络硬件加速主题。优先选择 VLDB/SIGMOD/ICDE/KDD/TPDS/Big Data ',
+  '等数据系统会议或高质量期刊的最新论文，并按发表年份从新到旧排序（最新优先）。',
+  `完成后，将结果通过 HTTP POST 提交到 http://127.0.0.1:${STUDIO_PORT}/api/workbench/paper-recommendations ，`,
+  'body 为 {"items":[{"title":"...","authors":["..."],"year":2025,"url":"...","venue":"...","doi":"...","reason":"..."}]}。',
+  '若无法调用接口，请在回复中清晰列出你找到的论文要点（标题/会议/年份/链接）。',
+].join('')
+
 function makeJob(): Record<string, unknown> {
   const now = new Date().toISOString()
   return {
+    id: PAPER_RECOMMENDER_JOB_ID,
     job_id: PAPER_RECOMMENDER_JOB_ID,
-    name: '论文推荐（本地知识库 · 顶会优先）',
-    schedule: SCHEDULE,
-    prompt: '依据本地知识库 wiki 中已收录的论文，检索并推荐相似的顶会论文。由 Hermes Studio 内置调度执行。',
+    name: '数据工程论文推荐（本地知识库 · 最新优先）',
+    prompt: JOB_PROMPT,
     skills: [],
-    no_agent: true,
-    script: JOB_SCRIPT_NAME,
+    skill: null,
+    model: null,
+    provider: null,
+    base_url: null,
+    script: null,
+    no_agent: false,
+    context_from: null,
+    schedule: { kind: 'cron', expr: SCHEDULE, display: SCHEDULE },
+    schedule_display: SCHEDULE,
+    repeat: { times: null, completed: 0 },
+    enabled_toolsets: null,
+    workdir: null,
+    profile: null,
     enabled: true,
     state: 'scheduled',
+    paused_at: null,
+    paused_reason: null,
     created_at: now,
-    origin: 'hermes-studio',
-    run_count: 0,
+    next_run_at: null,
+    last_run_at: null,
+    last_status: null,
+    last_error: null,
+    last_delivery_error: null,
+    deliver: 'local',
+    origin: null,
   }
 }
 
@@ -72,49 +146,25 @@ function makeJob(): Record<string, unknown> {
 function seedJobForProfile(profile: string): void {
   const path = cronJobsPathForProfile(profile)
   const { raw, jobs, asArray } = loadJobsFile(path)
-  if (jobs.some((j) => (j?.job_id || j?.id) === PAPER_RECOMMENDER_JOB_ID)) return
+  const index = jobs.findIndex((job) => (job?.job_id || job?.id) === PAPER_RECOMMENDER_JOB_ID)
+  if (index >= 0) {
+    const normalized = normalizeManagedJob(jobs[index])
+    if (JSON.stringify(normalized) !== JSON.stringify(jobs[index])) {
+      jobs[index] = normalized
+      saveJobsFile(path, raw, jobs, asArray)
+    }
+    return
+  }
   jobs.push(makeJob())
   saveJobsFile(path, raw, jobs, asArray)
 }
 
-/** 确保刷新脚本存在于 ~/.hermes/scripts/（cron tick 触发时使用）。 */
-function ensureRefreshScript(): void {
-  const scriptPath = jobScriptPath()
-  if (existsSync(scriptPath)) return
-  const content = `#!/usr/bin/env python3
-# 由 Hermes Studio 注入：定期刷新“本地知识库顶会论文推荐”。
-import json
-import sys
-import urllib.request
-
-PORT = ${STUDIO_PORT}
-URL = f"http://127.0.0.1:{PORT}/api/workbench/paper-recommendations/refresh"
-try:
-    req = urllib.request.Request(
-        URL, data=b"{}",
-        headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
-    count = payload.get("count") if isinstance(payload, dict) else None
-    print(f"paper-recommender refresh ok: count={count}")
-    sys.exit(0)
-except Exception as e:
-    print(f"paper-recommender refresh failed: {e}")
-    sys.exit(1)
-`
-  try {
-    mkdirSync(join(scriptPath, '..'), { recursive: true })
-    writeFileSync(scriptPath, content, 'utf-8')
-  } catch { /* 忽略 */ }
-}
-
-/** 启动时调用：确保任务存在于活跃 profile（及 default 兜底），并放置刷新脚本。 */
+/** 启动时调用：确保任务存在于活跃 profile（及 default 兜底）。 */
 export function ensurePaperRecommenderJob(): void {
   const profiles = new Set<string>([getActiveProfileName(), 'default'])
   for (const p of profiles) {
     try { seedJobForProfile(p) } catch { /* ignore */ }
   }
-  try { ensureRefreshScript() } catch { /* ignore */ }
 }
 
 /** 每次刷新后调用：回写运行元数据，使 Jobs 卡片显示真实历史。 */

@@ -4,6 +4,7 @@ import { NAlert, NButton, NEmpty, NSpin, NTag } from 'naive-ui'
 import {
   fetchWorkbenchSummary,
   refreshPaperRecommendations,
+  type PaperRecommendation,
   type ServiceStatus,
   type WorkbenchSummary,
 } from '@/api/workbench'
@@ -176,6 +177,113 @@ const recStatusLabel = computed(() => {
   if (status === 'pending') return '待生成'
   return '未知'
 })
+
+// ─── 论文推荐：paperhub 风格展示 ───────────────────────────────
+const paperRec = computed(() => summary.value?.paperRecommendations ?? null)
+
+const paperStatusType = computed<'success' | 'error' | 'warning'>(() => {
+  const status = paperRec.value?.status
+  if (status === 'success') return 'success'
+  if (status === 'failed') return 'error'
+  return 'warning'
+})
+
+const activeFilter = ref<'all' | 'top'>('all')
+const sortOrder = ref<'newest' | 'oldest'>('newest')
+const savedIds = ref<Set<string>>(new Set())
+const recentYear = new Date().getFullYear() - 1
+
+// 顶会类别 → 中文标签 + 配色（贴近 paperhub 的多彩分类标签）。
+const CATEGORY_LABELS: Record<string, string> = {
+  ml: '机器学习',
+  cv: '计算机视觉',
+  arch: '体系结构',
+  db: '数据/挖掘',
+  sys: '系统',
+  nlp: 'NLP',
+  default: '顶会',
+}
+
+const PALETTE: Record<string, { bg: string; color: string }> = {
+  ml: { bg: '#F3E5F5', color: '#6A1B9A' },
+  cv: { bg: '#E0F7FA', color: '#006064' },
+  arch: { bg: '#FFF3E0', color: '#E65100' },
+  db: { bg: '#FFF8E1', color: '#F57F17' },
+  sys: { bg: '#E3F2FD', color: '#0D47A1' },
+  nlp: { bg: '#E8EAF6', color: '#283593' },
+  default: { bg: '#E8EFF4', color: '#003B5C' },
+}
+
+function categoryKey(venue?: string | null): keyof typeof PALETTE {
+  const v = (venue || '').toLowerCase()
+  if (/(neurips|nips|icml|iclr|aaai|ijcai|uai|aistats|colt)/.test(v)) return 'ml'
+  if (/(cvpr|iccv|eccv|wacv|bmvc|3dv)/.test(v)) return 'cv'
+  if (/(isca|micro|hpca|asplos|dac|iccad|fpga|fpl|fpt|fccm|date|case|iscas|nocs|pact|cgo|esweek|rtas|rtss|samos|heap)/.test(v)) return 'arch'
+  if (/(sigmod|vldb|icde|kdd|www|icse|ase|fse|issta|big data|proceedings of the vldb)/.test(v)) return 'db'
+  if (/(osdi|sosp|nsdi|atc|eurosys|fast|socc|middleware)/.test(v)) return 'sys'
+  if (/(acl|emnlp|naacl|coling|tacl)/.test(v)) return 'nlp'
+  return 'default'
+}
+
+function categoryLabel(item: PaperRecommendation): string {
+  if (!item.venue) return '论文推荐'
+  return CATEGORY_LABELS[categoryKey(item.venue)]
+}
+
+function tagStyle(item: PaperRecommendation): Record<string, string> {
+  const p = PALETTE[categoryKey(item.venue)]
+  return { background: p.bg, color: p.color }
+}
+
+function formatAuthors(item: PaperRecommendation): string {
+  const authors = item.authors ?? []
+  if (!authors.length) return '佚名'
+  return authors.slice(0, 3).join('、') + (authors.length > 3 ? ' 等' : '')
+}
+
+// 优先展示“推荐理由”（与本地知识库的关联），退化为摘要。
+function displayAbstract(item: PaperRecommendation): string {
+  return item.reason || item.abstract || ''
+}
+
+function yearText(item: PaperRecommendation): string {
+  return item.year ? String(item.year) : '—'
+}
+
+function providerText(item: PaperRecommendation): string {
+  return item.provider || '外部检索'
+}
+
+function isRecent(item: PaperRecommendation): boolean {
+  return !!item.year && item.year >= recentYear
+}
+
+function toggleSave(id: string): void {
+  const next = new Set(savedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  savedIds.value = next
+}
+
+const visibleItems = computed<PaperRecommendation[]>(() => {
+  const all = paperRec.value?.items ?? []
+  let list = all
+  if (activeFilter.value === 'top') list = list.filter((it) => !!it.venue)
+  const sorted = [...list].sort((a, b) => {
+    const ay = a.year ?? 0
+    const by = b.year ?? 0
+    return sortOrder.value === 'newest' ? by - ay : ay - by
+  })
+  return sorted
+})
+
+// 每行最多 3 张卡片，溢出自动换行。
+const rows = computed<PaperRecommendation[][]>(() => {
+  const items = visibleItems.value
+  const out: PaperRecommendation[][] = []
+  for (let i = 0; i < items.length; i += 3) out.push(items.slice(i, i + 3))
+  return out
+})
 </script>
 
 <template>
@@ -262,14 +370,16 @@ const recStatusLabel = computed(() => {
           </RouterLink>
         </nav>
 
-        <section v-if="summary && summary.paperRecommendations" class="workbench-section" aria-labelledby="paper-rec-title">
-          <div class="workbench-section-header">
-            <h3 id="paper-rec-title" class="workbench-section-title">论文推荐</h3>
-            <div class="workbench-section-actions">
-              <NTag :type="summary.paperRecommendations && summary.paperRecommendations.status === 'success' ? 'success' : (summary.paperRecommendations && summary.paperRecommendations.status === 'failed' ? 'error' : 'warning')" size="small" :bordered="false">
-                {{ recStatusLabel }}
-              </NTag>
-              <NTag v-if="summary.paperRecommendations.topVenueOnly" type="error" size="small" :bordered="false">仅顶会</NTag>
+        <section v-if="paperRec" class="ph-section" aria-labelledby="ph-title">
+          <div class="ph-section-header">
+            <div class="ph-section-heading">
+              <h3 id="ph-title" class="ph-section-title">论文推荐</h3>
+              <p v-if="paperRec.focus" class="ph-section-sub">{{ paperRec.focus }}</p>
+            </div>
+            <div class="ph-section-actions">
+              <NTag :type="paperStatusType" size="small" :bordered="false">{{ recStatusLabel }}</NTag>
+              <NTag v-if="paperRec.topVenueOnly" type="error" size="small" :bordered="false">仅顶会</NTag>
+              <NTag v-if="paperRec.recentPriority" type="success" size="small" :bordered="false">最新优先</NTag>
               <NButton size="tiny" :disabled="recommending" :aria-busy="recommending" @click="refreshRecs">
                 <template #icon>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -283,35 +393,74 @@ const recStatusLabel = computed(() => {
             </div>
           </div>
 
+          <div class="ph-filter-bar">
+            <div class="ph-filters">
+              <button type="button" class="ph-chip" :class="{ active: activeFilter === 'all' }" @click="activeFilter = 'all'">全部</button>
+              <button type="button" class="ph-chip" :class="{ active: activeFilter === 'top' }" @click="activeFilter = 'top'">顶会论文</button>
+            </div>
+            <div class="ph-sort">
+              <span>排序</span>
+              <select v-model="sortOrder" class="ph-sort-select" aria-label="排序方式">
+                <option value="newest">最新优先</option>
+                <option value="oldest">最早优先</option>
+              </select>
+            </div>
+          </div>
+
           <NAlert v-if="recError" class="workbench-alert" type="error" :title="'刷新失败'">{{ recError }}</NAlert>
 
-          <div v-if="summary.paperRecommendations && summary.paperRecommendations.items.length" class="paper-rec-list">
-            <article
-              v-for="item in summary.paperRecommendations.items.slice(0, 5)"
-              :key="item.id"
-              class="paper-rec-item"
-            >
-              <h4 class="paper-rec-title">
-                <a v-if="item.url" :href="item.url" target="_blank" rel="noopener">{{ item.title }}</a>
-                <template v-else>{{ item.title }}</template>
-                <NTag v-if="item.venue" type="error" size="tiny" :bordered="false" class="paper-rec-venue-tag">顶会</NTag>
-              </h4>
-              <p v-if="item.venue" class="paper-rec-venue">{{ item.venue }}</p>
-              <p v-if="item.reason" class="paper-rec-reason">{{ item.reason }}</p>
-              <p class="paper-rec-meta">
-                <span v-if="item.authors && item.authors.length">作者：{{ item.authors.slice(0, 3).join('、') }}{{ item.authors.length > 3 ? ' 等' : '' }}</span>
-                <span v-if="item.year"> · {{ item.year }}</span>
-                <span v-if="item.provider"> · {{ item.provider }}</span>
-              </p>
-            </article>
+          <div v-if="visibleItems.length" class="ph-grid">
+            <div v-for="(row, idx) in rows" :key="idx" class="ph-row">
+              <article
+                v-for="item in row"
+                :key="item.id"
+                class="ph-card"
+                :class="{ 'ph-card--recent': isRecent(item) }"
+              >
+                <div class="ph-card-top">
+                  <span class="ph-tag" :style="tagStyle(item)">{{ categoryLabel(item) }}</span>
+                  <span class="ph-date">
+                    {{ yearText(item) }}
+                    <span v-if="isRecent(item)" class="ph-new">新</span>
+                  </span>
+                </div>
+                <h4 class="ph-card-title">
+                  <a v-if="item.url" :href="item.url" target="_blank" rel="noopener">{{ item.title }}</a>
+                  <template v-else>{{ item.title }}</template>
+                </h4>
+                <p class="ph-card-authors">{{ formatAuthors(item) }}</p>
+                <p v-if="displayAbstract(item)" class="ph-card-abstract">{{ displayAbstract(item) }}</p>
+                <div class="ph-card-footer">
+                  <div class="ph-metrics">
+                    <span>来源 {{ providerText(item) }}</span>
+                    <span v-if="item.year">· {{ item.year }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="ph-bookmark"
+                    :class="{ saved: savedIds.has(item.id) }"
+                    :aria-pressed="savedIds.has(item.id)"
+                    :title="savedIds.has(item.id) ? '已收藏' : '收藏'"
+                    @click="toggleSave(item.id)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path
+                        d="M6 4H18V20L12 16L6 20V4Z"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linejoin="round"
+                        :fill="savedIds.has(item.id) ? 'currentColor' : 'none'"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </article>
+            </div>
           </div>
           <NEmpty
             v-else
-            :description="summary.paperRecommendations && summary.paperRecommendations.error ? summary.paperRecommendations.error : '暂无可推荐的外部顶会论文，稍后自动刷新'"
+            :description="paperRec.error ? paperRec.error : '暂无可推荐的外部顶会论文，稍后自动刷新'"
           />
-          <p v-if="summary.paperRecommendations && summary.paperRecommendations.focus" class="paper-rec-focus">
-            依据本地知识库（{{ summary.paperRecommendations.paperCount }} 篇已收录论文）相似推荐 · 仅顶会论文
-          </p>
         </section>
 
         <section v-if="summary" class="workbench-section" aria-labelledby="service-status-title">
@@ -364,71 +513,393 @@ const recStatusLabel = computed(() => {
   text-decoration: underline;
 }
 
-.paper-rec-list {
+// ─── 论文推荐：paperhub 风格卡片 ──────────────────────────────
+$ph-navy: #003b5c;
+$ph-bg: #fafaf7;
+$ph-card: #ffffff;
+$ph-border: #e6e5d6;
+$ph-border-light: #f0ebda;
+$ph-text-dark: #1a1a1a;
+$ph-text-medium: #666666;
+$ph-text-light: #999999;
+$ph-text-lighter: #999999;
+$ph-text-abstract: #555555;
+$ph-serif: 'Source Serif 4', Georgia, 'Songti SC', 'SimSun', serif;
+$ph-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+.ph-section {
+  margin-top: 28px;
+}
+
+.ph-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.ph-section-title {
+  margin: 0;
+  font-family: $ph-serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: $ph-navy;
+  line-height: 1.2;
+}
+
+.ph-section-sub {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: $ph-text-medium;
+  max-width: 64ch;
+}
+
+.ph-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ph-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: $ph-card;
+  border: 1px solid $ph-border;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.ph-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ph-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 100px;
+  font-family: $ph-sans;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid $ph-border;
+  background: $ph-bg;
+  color: $ph-text-medium;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.ph-chip.active {
+  background: $ph-navy;
+  color: #fff;
+  border-color: $ph-navy;
+}
+
+.ph-chip:not(.active):hover {
+  border-color: $ph-navy;
+  color: $ph-navy;
+}
+
+.ph-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: $ph-sans;
+  font-size: 13px;
+  color: $ph-text-medium;
+}
+
+.ph-sort-select {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid $ph-border;
+  background: $ph-bg;
+  color: $ph-text-dark;
+  font-family: $ph-sans;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ph-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ph-row {
+  display: flex;
+  gap: 18px;
+}
+
+.ph-card {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 12px;
+  min-width: 0;
+  padding: 20px;
+  background: $ph-card;
+  border: 1px solid $ph-border-light;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(6, 8, 10, 0.04), 0 4px 12px rgba(6, 8, 10, 0.06);
+  transition: box-shadow 0.3s, transform 0.3s, border-color 0.3s;
 }
 
-.paper-rec-item {
-  padding: 14px 16px;
-  border: 1px solid $border-color;
-  border-radius: $radius-md;
-  background: $bg-card;
+.ph-card:hover {
+  box-shadow: 0 2px 4px rgba(6, 8, 10, 0.06), 0 8px 24px rgba(6, 8, 10, 0.1);
+  transform: translateY(-2px);
 }
 
-.paper-rec-title {
-  margin: 0 0 8px;
-  font-size: 15px;
+.ph-card--recent {
+  border-color: #cfe3d2;
+}
+
+.ph-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ph-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-family: $ph-sans;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ph-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: $ph-sans;
+  font-size: 12px;
+  color: $ph-text-light;
+}
+
+.ph-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #1f9d55;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ph-card-title {
+  margin: 0;
+  font-family: $ph-serif;
+  font-size: 18px;
   font-weight: 600;
   line-height: 1.45;
-  color: $text-primary;
+  color: $ph-text-dark;
 }
 
-.paper-rec-title a {
+.ph-card-title a {
   color: inherit;
   text-decoration: none;
 }
 
-.paper-rec-title a:hover {
-  color: $brand;
+.ph-card-title a:hover {
+  color: $ph-navy;
   text-decoration: underline;
 }
 
-.paper-rec-venue-tag {
-  margin-left: 8px;
-  vertical-align: middle;
-  font-weight: 600;
-}
-
-.paper-rec-venue {
-  margin: 0 0 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: $text-muted;
-}
-
-.paper-rec-reason {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: $text-secondary;
-  line-height: 1.55;
-}
-
-.paper-rec-meta {
+.ph-card-authors {
   margin: 0;
-  font-size: 12px;
-  color: $text-muted;
+  font-family: $ph-sans;
+  font-size: 13px;
+  color: $ph-text-medium;
 }
 
-.paper-rec-focus {
-  margin: 12px 0 0;
-  padding: 8px 12px;
+.ph-card-abstract {
+  margin: 0;
+  font-family: $ph-sans;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: $ph-text-abstract;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.ph-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.ph-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: $ph-sans;
   font-size: 12px;
-  color: $text-secondary;
-  background: $bg-secondary;
-  border-radius: $radius-sm;
-  font-style: italic;
+  color: $ph-text-lighter;
+  flex-wrap: wrap;
+}
+
+.ph-bookmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid $ph-border;
+  border-radius: 8px;
+  background: $ph-bg;
+  color: $ph-text-light;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.ph-bookmark:hover {
+  border-color: $ph-navy;
+  color: $ph-navy;
+}
+
+.ph-bookmark.saved {
+  background: $ph-navy;
+  border-color: $ph-navy;
+  color: #fff;
+}
+
+.ph-bookmark svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 900px) {
+  .ph-row {
+    flex-wrap: wrap;
+  }
+
+  .ph-card {
+    min-width: 260px;
+  }
+}
+
+@media (max-width: 600px) {
+  .ph-row {
+    flex-direction: column;
+  }
+
+  .ph-card {
+    min-width: 0;
+  }
+
+  .ph-section-title {
+    font-size: 22px;
+  }
+}
+
+// 深色模式适配（保持 paperhub 的浅色卡片质感，仅调整容器与文字）
+html.dark {
+  .ph-section-title {
+    color: #cfe3f2;
+  }
+
+  .ph-section-sub {
+    color: #a0a0a0;
+  }
+
+  .ph-filter-bar {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+  }
+
+  .ph-chip {
+    background: #252525;
+    border-color: #3a3a3a;
+    color: #a0a0a0;
+  }
+
+  .ph-chip.active {
+    background: #005bac;
+    border-color: #005bac;
+    color: #fff;
+  }
+
+  .ph-chip:not(.active):hover {
+    border-color: #4f9be0;
+    color: #cfe3f2;
+  }
+
+  .ph-sort-select {
+    background: #252525;
+    border-color: #3a3a3a;
+    color: #e0e0e0;
+  }
+
+  .ph-card {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+    box-shadow: none;
+  }
+
+  .ph-card--recent {
+    border-color: #2f5d3f;
+  }
+
+  .ph-card-title {
+    color: #e0e0e0;
+  }
+
+  .ph-card-title a:hover {
+    color: #76b6ea;
+  }
+
+  .ph-card-authors {
+    color: #a0a0a0;
+  }
+
+  .ph-card-abstract {
+    color: #bdbdbd;
+  }
+
+  .ph-date,
+  .ph-metrics {
+    color: #888;
+  }
+
+  .ph-bookmark {
+    background: #252525;
+    border-color: #3a3a3a;
+    color: #888;
+  }
+
+  .ph-bookmark.saved {
+    background: #005bac;
+    border-color: #005bac;
+    color: #fff;
+  }
 }
 </style>

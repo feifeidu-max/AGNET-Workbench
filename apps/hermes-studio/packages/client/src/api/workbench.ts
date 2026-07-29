@@ -22,6 +22,39 @@ export interface WorkbenchSummary {
   services: ServiceHealth[]
 }
 
+export interface WechatSource {
+  id: string
+  name: string
+  url: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  lastSyncAt: string | null
+  lastSyncStatus: 'never' | 'success' | 'partial' | 'failed'
+  lastSyncError: string | null
+  importedCount: number
+  discoveredCount: number
+}
+
+export interface WechatSyncReport {
+  startedAt: string
+  finishedAt: string
+  discovered: number
+  imported: number
+  skipped: number
+  rejected: number
+  errors: string[]
+  sources: Array<{
+    sourceId: string
+    sourceName: string
+    discovered: number
+    imported: number
+    skipped: number
+    rejected: number
+    errors: string[]
+  }>
+}
+
 export type KnowledgeDraftStatus =
   | 'uploaded'
   | 'parsing'
@@ -130,6 +163,7 @@ export interface PaperRecommendation {
   provider?: string | null
   reason?: string | null
   venue?: string | null
+  doi?: string | null
 }
 
 export interface PaperRecommendationsPayload {
@@ -140,6 +174,7 @@ export interface PaperRecommendationsPayload {
   nextRunAt: string | null
   count: number
   topVenueOnly: boolean
+  recentPriority: boolean
   items: PaperRecommendation[]
   error?: string | null
 }
@@ -274,6 +309,24 @@ function normalizeKnowledgeProject(value: unknown): KnowledgeProject {
   }
 }
 
+function normalizeWechatSource(value: unknown): WechatSource {
+  const item = asRecord(value)
+  const status = asString(item.lastSyncStatus, 'never') as WechatSource['lastSyncStatus']
+  return {
+    id: asString(item.id),
+    name: asString(item.name, '微信公众号来源'),
+    url: asString(item.url),
+    enabled: item.enabled !== false,
+    createdAt: asString(item.createdAt ?? item.created_at),
+    updatedAt: asString(item.updatedAt ?? item.updated_at),
+    lastSyncAt: asNullableString(item.lastSyncAt ?? item.last_sync_at),
+    lastSyncStatus: ['never', 'success', 'partial', 'failed'].includes(status) ? status : 'never',
+    lastSyncError: asNullableString(item.lastSyncError ?? item.last_sync_error),
+    importedCount: asNumber(item.importedCount ?? item.imported_count),
+    discoveredCount: asNumber(item.discoveredCount ?? item.discovered_count),
+  }
+}
+
 export async function fetchWorkbenchSummary(): Promise<WorkbenchSummary> {
   return request<WorkbenchSummary>('/api/workbench/summary')
 }
@@ -285,6 +338,30 @@ export async function fetchPaperRecommendations(): Promise<PaperRecommendationsP
 export async function refreshPaperRecommendations(): Promise<PaperRecommendationsPayload> {
   return request<PaperRecommendationsPayload>('/api/workbench/paper-recommendations/refresh', {
     method: 'POST',
+  })
+}
+
+export async function fetchWechatSources(): Promise<WechatSource[]> {
+  const result = await request<unknown>('/api/workbench/wechat-sources')
+  return arrayFromResponse(result, 'sources').map(normalizeWechatSource)
+}
+
+export async function addWechatSource(name: string, url: string): Promise<WechatSource> {
+  const result = asRecord(await request<unknown>('/api/workbench/wechat-sources', {
+    method: 'POST',
+    body: JSON.stringify({ name, url }),
+  }))
+  return normalizeWechatSource(result.source ?? result)
+}
+
+export async function removeWechatSource(id: string): Promise<void> {
+  await request<unknown>(`/api/workbench/wechat-sources/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export async function syncWechatSources(sourceId?: string): Promise<WechatSyncReport> {
+  return request<WechatSyncReport>('/api/workbench/wechat-sources/sync', {
+    method: 'POST',
+    body: JSON.stringify(sourceId ? { sourceId } : {}),
   })
 }
 
