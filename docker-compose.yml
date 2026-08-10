@@ -1,12 +1,14 @@
 # ============================================================================
-# Hermes Studio + LLM Wiki — 一键 Docker 部署
+# Hermes Studio + LLM Wiki — 一行指令 Docker 部署
 # ----------------------------------------------------------------------------
-# 快速开始:
-#   1. cp .env.example .env          # 修改令牌 / 端口
-#   2. docker compose up -d                        # 仅 Hermes Studio (6060)
-#   3. docker compose --profile kb up -d           # + LLM Wiki 知识库 (19828)
+# 最简一行指令（自动生成 .env 与随机令牌，并拉起完整栈）:
+#   ./start.sh            # Linux / macOS / WSL
+#   .\start.ps1           # Windows PowerShell
 #
-# LLM Wiki（知识库 / 论文推荐）作为独立 headless 服务运行。
+# 或零配置原始一行指令（使用默认令牌，仅本机）:
+#   docker compose --profile kb up -d
+#
+# LLM Wiki（知识库 / 论文推荐）作为独立 headless 服务运行（--profile kb）。
 # WebUI 通过 Docker 内部网络访问它（LLM_WIKI_ALLOW_REMOTE=1）。
 # 详见 DOCKER.md。
 # ============================================================================

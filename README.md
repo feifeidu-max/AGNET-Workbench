@@ -8,6 +8,26 @@ AGNET 是面向个人研究与日常工作的 Windows 本地智能工作台。�
 
 > 不需要安装 Ollama，也不需要执行 `ollama pull bge-m3`。当前知识库固定使用 **关键词检索 + 知识图谱扩展**，不生成 embedding、不运行向量数据库或本地生成模型。
 
+## 🚀 一行指令 Docker 部署（推荐给新机器 / 服务器）
+
+不想在本机安装 Node / Rust / Tauri 工具链？用 Docker 一行指令即可拉起整套服务（WebUI + 知识库）：
+
+```bash
+# 自动生成 .env（随机令牌）并拉起完整栈
+./start.sh          # Linux / macOS / WSL
+# 或
+.\start.ps1         # Windows PowerShell
+
+# 也可以零配置文件直接运行（使用默认令牌，仅本机）：
+docker compose --profile kb up -d
+```
+
+- Hermes Studio 访问地址： http://localhost:6060
+- 知识库 API： http://localhost:19828/api/v1
+- 完整配置、数据持久化与排错见 [DOCKER.md](DOCKER.md)。
+
+> 下方「首次安装」是面向本机 Windows 的源码构建运行方式；Docker 方式无需安装编译工具链，更适合交付给后人一键部署。
+
 ## 产品概览
 
 | 组件 | 固定版本 | 用途 |
@@ -492,6 +512,7 @@ Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 8648,19828,19827
 
 更完整的构建、运维和验收记录见：
 
+- [Docker 一键部署指南](DOCKER.md)
 - [Windows 安装与运行手册](docs/SETUP-WINDOWS.md)
 - [交付与验收状态](docs/DELIVERY-STATUS.md)
 - [产品需求与实现基线](plan.md)

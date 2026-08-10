@@ -16,19 +16,21 @@
 - 已安装 Docker Engine 或 Docker Desktop（Linux 需 Docker Compose v2）。
 - 在本项目根目录执行命令。
 
-## 3. 快速开始
+## 3. 一行指令部署（推荐）
 
 ```bash
-# 1. 复制并编辑环境变量
-cp .env.example .env
-#   至少修改 LLM_WIKI_API_TOKEN（WebUI 与知识库必须一致）
+# 方式 A：脚本自动准备 .env（随机令牌）+ 拉起完整栈
+./start.sh            # Linux / macOS / WSL
+# 或
+.\start.ps1           # Windows PowerShell
 
-# 2. 仅启动 Hermes Studio（不含知识库）
-docker compose up -d
-
-# 3. 启动完整栈（含 LLM Wiki 知识库）
+# 方式 B：零配置文件，直接用默认令牌拉起完整栈（仅本机）
 docker compose --profile kb up -d
 ```
+
+脚本会在缺少 `.env` 时自动复制 `.env.example` 并把占位令牌替换为随机值；之后
+自动构建（首次）并启动 WebUI 与 LLM Wiki。首次构建含 Rust 编译，可能耗时数分钟。
+代码更新后需重建镜像时执行： `docker compose --profile kb build`。
 
 启动后访问：
 
