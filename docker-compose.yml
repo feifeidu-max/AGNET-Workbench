@@ -1,0 +1,69 @@
+# ============================================================================
+# Hermes Studio + LLM Wiki — 一键 Docker 部署
+# ----------------------------------------------------------------------------
+# 快速开始:
+#   1. cp .env.example .env          # 修改令牌 / 端口
+#   2. docker compose up -d                        # 仅 Hermes Studio (6060)
+#   3. docker compose --profile kb up -d           # + LLM Wiki 知识库 (19828)
+#
+# LLM Wiki（知识库 / 论文推荐）作为独立 headless 服务运行。
+# WebUI 通过 Docker 内部网络访问它（LLM_WIKI_ALLOW_REMOTE=1）。
+# 详见 DOCKER.md。
+# ============================================================================
+
+services:
+  hermes-webui:
+    build:
+      context: ./apps/hermes-studio
+      dockerfile: Dockerfile
+    image: ${WEBUI_IMAGE:-hermes-web-ui:latest}
+    container_name: ${WEBUI_CONTAINER_NAME:-hermes-webui}
+    ports:
+      - "${PORT:-6060}:${PORT:-6060}"
+      - "${PREVIEW_FRONTEND_PORT:-8651}:8651"
+      - "${XAI_OAUTH_PORT:-56121}:56121"
+    volumes:
+      - ${HERMES_DATA_DIR:-./hermes_data}:/home/agent/.hermes
+      - ${HERMES_DATA_DIR:-./hermes_data}/hermes-web-ui:/home/agent/.hermes-web-ui
+    environment:
+      - PORT=${PORT:-6060}
+      - HERMES_HOME=/home/agent/.hermes
+      - HERMES_BIN=/opt/hermes/.venv/bin/hermes
+      - HERMES_WEB_UI_MANAGED_GATEWAY=1
+      - HERMES_WEB_UI_AUTH_JWT_EXPIRES_IN=${HERMES_WEB_UI_AUTH_JWT_EXPIRES_IN:-30d}
+      - HERMES_WEB_UI_XAI_CALLBACK_BIND_HOST=0.0.0.0
+      - HERMES_ALLOW_ROOT_GATEWAY=1
+      - PATH=/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      # --- 连接 LLM Wiki（容器网络）---
+      - LLM_WIKI_ALLOW_REMOTE=1
+      - LLM_WIKI_BASE_URL=http://llm-wiki:19828/api/v1
+      - LLM_WIKI_API_TOKEN=${LLM_WIKI_API_TOKEN:-change-me-in-prod}
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    networks:
+      - hermes-net
+
+  llm-wiki:
+    profiles: ["kb"]
+    build:
+      context: ./apps/llm-wiki
+      dockerfile: Dockerfile.llm-wiki
+    image: ${WIKI_IMAGE:-llm-wiki:latest}
+    container_name: ${WIKI_CONTAINER_NAME:-llm-wiki}
+    environment:
+      - LLM_WIKI_HEADLESS=1
+      - LLM_WIKI_BIND_HOST=0.0.0.0
+      - LLM_WIKI_API_TOKEN=${LLM_WIKI_API_TOKEN:-change-me-in-prod}
+      - RUST_BACKTRACE=1
+    ports:
+      - "${WIKI_PORT:-19828}:19828"
+    volumes:
+      - ${WIKI_DATA_DIR:-./wiki_data}:/home/agent
+    restart: unless-stopped
+    networks:
+      - hermes-net
+
+networks:
+  hermes-net:
+    driver: bridge

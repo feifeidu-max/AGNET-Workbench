@@ -113,9 +113,15 @@ function handleAdvancedNavigation(event: MouseEvent) {
   <aside class="sidebar" :class="{ open: appStore.sidebarOpen, collapsed: appStore.sidebarCollapsed }" @click="handleSidebarClick">
     <nav class="sidebar-nav">
       <div class="primary-nav" aria-label="常用功能">
-        <RouteLinkItem class="nav-item primary-nav-item" :to="{ name: 'hermes.workbench' }" :active="selectedKey === 'hermes.workbench'" title="个人工作台">
+        <RouteLinkItem class="nav-item primary-nav-item" :to="{ name: 'hermes.workbench' }" :active="selectedKey === 'hermes.workbench'" title="数据知识库">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span>数据知识库</span>
+        </RouteLinkItem>
+        <RouteLinkItem class="nav-item primary-nav-item" :to="{ name: 'hermes.personalWorkbench' }" :active="selectedKey === 'hermes.personalWorkbench'" title="个人工作台">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 4h6v6H4z" /><path d="M14 4h6v6h-6z" /><path d="M4 14h6v6H4z" /><path d="M14 14h6v6h-6z" />
           </svg>
           <span>个人工作台</span>
         </RouteLinkItem>

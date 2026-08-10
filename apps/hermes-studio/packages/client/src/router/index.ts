@@ -13,7 +13,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'hermes.paperhub',
-      component: () => import('@/views/hermes/PaperHubView.vue'),
+      redirect: (to) => ({ name: 'hermes.workbench', query: to.query }),
     },
     {
       path: '/login',
@@ -40,6 +40,12 @@ const router = createRouter({
       path: '/hermes/knowledge',
       name: 'hermes.knowledge',
       component: () => import('@/views/hermes/KnowledgeView.vue'),
+      // The data library is the public knowledge homepage. Keep legacy
+      // no-tab links on that surface instead of opening a second overview.
+      beforeEnter: (to) => {
+        if (!to.query.tab) return { name: 'hermes.workbench', query: to.query }
+        return true
+      },
     },
     {
       path: '/hermes/session/:sessionId',

@@ -82,6 +82,7 @@ const tagMappings = {
   'routes/webhook.ts': { name: 'Webhook', description: 'Incoming webhooks' },
   'routes/auth.ts': { name: 'Auth', description: 'Authentication management' },
   'routes/devices.ts': { name: 'Devices', description: 'Device pairing and LAN peer operations' },
+  'routes/workbench.ts': { name: 'Workbench', description: 'Data library, paper recommendations, and WeChat article ingestion' },
   'routes/coding-agents.ts': { name: 'Coding Agents', description: 'Coding agent installation, config, and runs' },
   'routes/api-docs.ts': { name: 'API Docs', description: 'OpenAPI route catalog' },
 }
@@ -134,7 +135,10 @@ function scanRouteFile(filePath, tagInfo, paths) {
   }
 
   // Pattern 2: inline functions - groupChatRoutes.post('/path', async (ctx) => {...})
-  const inlineRouteRegex = /\w+Routes?\.(get|post|put|delete|patch)\(\s*['"]([^'"]+)['"]\s*,[^\n]*?async\s*\(ctx\)/g
+  // Koa handlers in TypeScript commonly annotate the Context parameter.
+  // Accept both `async (ctx)` and `async (ctx: Context)` forms so manually
+  // defined routes are not silently omitted from the agent-facing catalog.
+  const inlineRouteRegex = /\w+Routes?\.(get|post|put|delete|patch)\(\s*['"]([^'"]+)['"]\s*,[^\n]*?async\s*\(\s*ctx(?:\s*:\s*[^)]*)?\s*\)/g
 
   while ((match = inlineRouteRegex.exec(content)) !== null) {
     const [, method, path] = match

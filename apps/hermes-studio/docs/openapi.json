@@ -37,6 +37,10 @@
       "description": "Device pairing and LAN peer operations"
     },
     {
+      "name": "Workbench",
+      "description": "Data library, paper recommendations, and WeChat article ingestion"
+    },
+    {
       "name": "Coding Agents",
       "description": "Coding agent installation, config, and runs"
     },
@@ -2431,6 +2435,243 @@
             "description": "Not found"
           }
         }
+      }
+    },
+    "/api/workbench/paper-recommendations": {
+      "get": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Get paper-recommendations",
+        "description": "GET /api/workbench/paper-recommendations",
+        "operationId": "getPaper-recommendations",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Create paper-recommendations",
+        "description": "POST /api/workbench/paper-recommendations",
+        "operationId": "createPaper-recommendations",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/workbench/paper-recommendations/refresh": {
+      "post": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Create refresh",
+        "description": "POST /api/workbench/paper-recommendations/refresh",
+        "operationId": "createRefresh",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/workbench/summary": {
+      "get": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Get summary",
+        "description": "GET /api/workbench/summary",
+        "operationId": "getSummary",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/workbench/wechat-discovery": {
+      "post": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Create wechat-discovery",
+        "description": "POST /api/workbench/wechat-discovery",
+        "operationId": "createWechat-discovery",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/workbench/wechat-sources": {
+      "get": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Get wechat-sources",
+        "description": "GET /api/workbench/wechat-sources",
+        "operationId": "getWechat-sources",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Create wechat-sources",
+        "description": "POST /api/workbench/wechat-sources",
+        "operationId": "createWechat-sources",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/workbench/wechat-sources/sync": {
+      "post": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Create sync",
+        "description": "POST /api/workbench/wechat-sources/sync",
+        "operationId": "createSync",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/workbench/wechat-sources/{id}": {
+      "delete": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Delete :id",
+        "description": "DELETE /api/workbench/wechat-sources/:id",
+        "operationId": "deleteWechat-sources",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/health": {

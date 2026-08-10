@@ -23,16 +23,27 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { config } from '../config'
 import { llmWikiJson, LlmWikiApiError, publicKnowledgeErrorMessage } from './knowledge/llm-wiki-client'
-import { recordPaperRecommenderRun } from './paper-recommender-job'
+import { nextScheduledRunAt, recordPaperRecommenderRun } from './paper-recommender-job'
 
 const RECOMMEND_INTERVAL_MS = 6 * 60 * 60 * 1000
 const FIRST_RUN_DELAY_MS = 30 * 1000
 const MAX_ITEMS = 6
 const MAX_FOCUS_LENGTH = 400
+// Keep the automatic feed useful for current research. Older top-venue
+// records can still appear in provider search results, but must not displace
+// recent papers on the home page.
+const RECENT_YEAR_WINDOW = 7
 const CANDIDATE_PROVIDERS = ['openalex', 'crossref', 'arxiv']
 // 一次检索多拉一些候选，再做“顶会”过滤，保证最终能凑满 MAX_ITEMS。
 const CANDIDATE_FETCH_LIMIT = 30
 const DATA_FOCUS_QUERIES = [
+  // Explicit venue probes keep recency from depending on a provider's
+  // relevance ranking (which otherwise tends to return older survey papers).
+  'VLDB data lake systems',
+  'SIGMOD data lake management',
+  'TKDE data lake data management',
+  'ICDE data engineering data systems',
+  'KDD data mining data systems',
   'data engineering data platform data management',
   'data lakehouse storage table format data warehouse',
   'stream processing data pipeline real-time analytics',
@@ -45,9 +56,9 @@ const DATA_DOMAIN_TERMS = [
   'spark', 'flink', 'kafka', 'ingestion', 'catalog',
 ]
 const EXCLUDED_DOMAIN_TERMS = ['point cloud', 'voxel', 'near-memory accelerator', 'neural accelerator']
-// 候选本身不含 venue 字段，需要根据 DOI 向 Crossref/OpenAlex 反查会议名称，
-// 再按顶会白名单过滤。这里覆盖与本项目（点云/神经网络加速器）相关的计算机顶会，
-// 也包含 ML/视觉/机器人/系统/安全/网络等通用 CS 顶会。
+// 候选本身不含 venue 字段，需要根据 DOI 向 Crossref/OpenAlex 反查会议/期刊名称，
+// 再按数据系统及通用 CS 顶级 venue 白名单过滤。白名单使用完整刊名和常见缩写，
+// 避免把普通的“大数据”期刊误标成顶级论文。
 const TOP_CONFERENCE_KEYWORDS = [
   // 体系结构 / EDA / 硬件加速
   'isca', 'micro', 'hpca', 'asplos', 'dac', 'iccad', 'fpga', 'fpl', 'fpt', 'fccm',
@@ -69,8 +80,12 @@ const TOP_CONFERENCE_KEYWORDS = [
   'usenix', 'ccs', 'oakland', 'ndss', 'acsac', 'raid',
   // 网络
   'sigcomm', 'mobicom', 'infocom', 'conext', 'imc', 'mobicom',
-  // 数据库 / 数据挖掘 / 软件工程
-  'sigmod', 'vldb', 'icde', 'kdd', 'www', 'tpds', 'big data', 'proceedings of the vldb', 'icse', 'ase', 'fse', 'issta',
+  // 数据库 / 数据挖掘 / 数据系统（会议与顶级期刊）
+  'sigmod', 'acm sigmod record', 'vldb', 'the vldb journal', 'vldb journal', 'icde', 'edbt', 'pods', 'cidr', 'icdt',
+  'dasfaa', 'ssdbm', 'kdd', 'www', 'tpds', 'ieee transactions on parallel and distributed systems',
+  'tkde', 'ieee transactions on knowledge and data engineering', 'tods', 'acm transactions on database systems',
+  'data mining and knowledge discovery',
+  'icse', 'ase', 'fse', 'issta',
   // 语音 / 信号
   'icassp', 'interspeech',
 ]
@@ -139,9 +154,22 @@ function normalizeCandidate(value: unknown): PaperRecommendation | null {
     url: asNullableString(item.url),
     provider: asNullableString(item.provider ?? item.source),
     reason: asNullableString(item.reason ?? item.recommendedReason ?? item.recommended_reason),
-    venue: null,
+    venue: asNullableString(item.venue ?? item.journal ?? item.containerTitle ?? item.container_title),
     doi: asNullableString(item.doi),
   }
+}
+
+const METADATA_TITLE_PATTERNS = [
+  /^proceedings\b/i,
+  /\bconference proceedings\b/i,
+  /\binformation for authors\b/i,
+  /\btable of contents\b/i,
+  /\b(?:^|\s)(?:toc|index|commentary)\b/i,
+  /\borganizing committee\b/i,
+]
+
+function isMetadataCandidate(item: PaperRecommendation): boolean {
+  return METADATA_TITLE_PATTERNS.some((pattern) => pattern.test(item.title))
 }
 
 /**
@@ -437,6 +465,12 @@ function isDataDomainCandidate(item: PaperRecommendation): boolean {
   return DATA_DOMAIN_TERMS.some((term) => text.includes(term))
 }
 
+function isRecentCandidate(item: PaperRecommendation): boolean {
+  if (item.year === null) return false
+  const cutoff = new Date().getUTCFullYear() - RECENT_YEAR_WINDOW
+  return item.year >= cutoff && item.year <= new Date().getUTCFullYear() + 1
+}
+
 /**
  * 根据焦点做多路“相似性检索”并筛选顶会、按发表时间倒序（最新优先）。
  * - baseQuery + 每篇 KB 论文标题（pageQueries）+ wiki 概念检索词（conceptQuery）
@@ -448,7 +482,7 @@ function isDataDomainCandidate(item: PaperRecommendation): boolean {
  */
 async function fetchCandidates(
   focus: RecommendationFocus | null,
-): Promise<{ items: PaperRecommendation[]; viaSearch: boolean }> {
+): Promise<{ items: PaperRecommendation[]; viaSearch: boolean; topVenueOnly: boolean }> {
   const queries: string[] = [...DATA_FOCUS_QUERIES]
   if (focus) {
     if (focus.baseQuery) queries.push(focus.baseQuery)
@@ -456,7 +490,7 @@ async function fetchCandidates(
     if (focus.conceptQuery) queries.push(focus.conceptQuery)
   }
   // 去重并限流（避免一次性过多外网请求）。
-  const uniqueQueries = [...new Set(queries.map((q) => q.trim()).filter((q) => q.length > 0))].slice(0, 8)
+  const uniqueQueries = [...new Set(queries.map((q) => q.trim()).filter((q) => q.length > 0))].slice(0, 12)
 
   let raw: unknown[] = []
   let viaSearch = false
@@ -471,10 +505,15 @@ async function fetchCandidates(
     viaSearch = false
   }
 
-  const normalizedCandidates = raw
+  const allCandidates = raw
     .map(normalizeCandidate)
     .filter((item): item is PaperRecommendation => item !== null)
-    .filter(isDataDomainCandidate)
+    .filter((item) => !isMetadataCandidate(item))
+  // The search query is already data-focused. If a provider omits abstracts or
+  // uses non-English metadata, keep those candidates instead of turning a
+  // successful search into an empty recommendation panel.
+  const domainCandidates = allCandidates.filter(isDataDomainCandidate)
+  const normalizedCandidates = domainCandidates.length > 0 ? domainCandidates : allCandidates
   const deduplicated = new Map<string, PaperRecommendation>()
   for (const item of normalizedCandidates) {
     const key = (item.doi ?? item.url ?? item.id).toLowerCase()
@@ -492,25 +531,48 @@ async function fetchCandidates(
   const topVenue = enriched.filter((item) => isTopVenue(item.venue))
   // venue 反查整体失败（网络/限流）时退化为不过滤，避免长期空白；
   // 若已成功解析但无顶会命中，则严格只返回顶会（可能为空）。
-  const allEnrichFailed = enriched.length > 0 && enriched.every((item) => !item.enrichResolved)
+  // A venue lookup can succeed without matching the conservative top-venue
+  // allowlist (for example, a strong data-engineering journal). Show those
+  // data-focused candidates as a useful fallback rather than returning zero.
   const pool: Array<PaperRecommendation & { enrichResolved: boolean }> =
-    topVenue.length > 0 ? topVenue : allEnrichFailed ? enriched : []
+    topVenue.length > 0 ? topVenue : enriched
 
+  // Providers sometimes return very old proceedings for broad venue queries.
+  // Prefer dated papers from the recent window and never let stale records
+  // fill the feed. Undated records remain a last-resort fallback because a
+  // provider may omit publication metadata for an otherwise valid result.
+  const recent = pool.filter(isRecentCandidate)
+  const undated = pool.filter((item) => item.year === null)
+  const eligible = recent.length > 0 ? recent : undated
   // 按发表年份倒序：最近发表的顶会论文优先级最高。
-  const sorted = pool.slice().sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+  const sorted = eligible.slice().sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
   const chosen = sorted
     .slice(0, MAX_ITEMS)
     .map(({ enrichResolved, ...rest }) => rest)
-  return { items: chosen, viaSearch }
+  return { items: chosen, viaSearch, topVenueOnly: topVenue.length > 0 }
 }
 
 export async function generateRecommendations(): Promise<PaperRecommendationsPayload> {
   const generatedAt = new Date().toISOString()
-  const nextRunAt = new Date(Date.now() + RECOMMEND_INTERVAL_MS).toISOString()
+  const nextRunAt = nextScheduledRunAt()
   try {
     const kb = await buildFocusFromKnowledgeBase()
-    const { items } = await fetchCandidates(kb)
+    const { items, topVenueOnly } = await fetchCandidates(kb)
     const paperCount = kb?.paperCount ?? 0
+    const previous = loadRecommendations()
+    if (items.length === 0 && previous.items.length > 0) {
+      const preserved: PaperRecommendationsPayload = {
+        ...previous,
+        status: 'partial',
+        generatedAt,
+        nextRunAt,
+        paperCount: paperCount || previous.paperCount,
+        error: '本轮外部检索暂无新结果，保留上一轮推荐论文',
+      }
+      persist(preserved)
+      recordPaperRecommenderRun(preserved.status, preserved.error)
+      return preserved
+    }
     const payload: PaperRecommendationsPayload = {
       status: items.length > 0 ? 'success' : 'partial',
       generatedAt,
@@ -518,10 +580,14 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
       paperCount,
       nextRunAt,
       count: items.length,
-      topVenueOnly: true,
+      topVenueOnly,
       recentPriority: true,
       items,
-      error: items.length === 0 ? '暂无可推荐的外部顶会论文候选' : null,
+      error: items.length === 0
+        ? '暂无可推荐的数据方向论文候选'
+        : topVenueOnly
+          ? null
+          : '本轮未命中顶会白名单，已展示数据方向候选',
     }
     persist(payload)
     recordPaperRecommenderRun(payload.status, payload.error)
@@ -567,8 +633,14 @@ export function loadRecommendations(): PaperRecommendationsPayload {
   return emptyPayload('pending')
 }
 
+let refreshInFlight: Promise<PaperRecommendationsPayload> | null = null
+
 export async function refreshRecommendations(): Promise<PaperRecommendationsPayload> {
-  return generateRecommendations()
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = generateRecommendations().finally(() => {
+    refreshInFlight = null
+  })
+  return refreshInFlight
 }
 
 /**
@@ -578,7 +650,7 @@ export async function refreshRecommendations(): Promise<PaperRecommendationsPayl
  */
 export function saveAgentRecommendations(rawItems: unknown[]): PaperRecommendationsPayload {
   const generatedAt = new Date().toISOString()
-  const nextRunAt = new Date(Date.now() + RECOMMEND_INTERVAL_MS).toISOString()
+  const nextRunAt = nextScheduledRunAt()
   const items: PaperRecommendation[] = (Array.isArray(rawItems) ? rawItems : [])
     .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && typeof (x as any).title === 'string')
     .slice(0, MAX_ITEMS)

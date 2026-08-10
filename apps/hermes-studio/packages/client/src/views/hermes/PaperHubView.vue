@@ -109,25 +109,24 @@ const filtered = computed<PaperRecommendation[]>(() => {
   return list
 })
 
-const trending = computed<{ name: string; count: number }[]>(() => {
+const trending = computed<{ name: string }[]>(() => {
   if (!items.value.length) {
     return [
-      { name: '人工智能', count: 2341 },
-      { name: '大数据', count: 1876 },
-      { name: '深度学习', count: 1567 },
-      { name: '计算机视觉', count: 1342 },
-      { name: '体系结构', count: 980 },
-      { name: '系统', count: 845 },
+      { name: '人工智能' },
+      { name: '大数据' },
+      { name: '深度学习' },
+      { name: '计算机视觉' },
+      { name: '体系结构' },
+      { name: '系统' },
     ]
   }
-  const map = new Map<string, number>()
+  const names = new Set<string>()
   for (const it of items.value) {
     const key = tagFor(it.venue).label
-    map.set(key, (map.get(key) ?? 0) + 1)
+    names.add(key)
   }
-  return [...map.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
+  return [...names]
+    .map((name) => ({ name }))
     .slice(0, 6)
 })
 
@@ -404,7 +403,6 @@ onMounted(() => {
       <div class="ph-trending-grid">
         <div v-for="t in trending" :key="t.name" class="ph-trending-card">
           <div class="ph-trending-name">{{ t.name }}</div>
-          <div class="ph-trending-count">{{ t.count }} 篇论文</div>
         </div>
       </div>
     </section>
@@ -857,12 +855,6 @@ onMounted(() => {
   font-weight: 600;
   color: var(--ph-text-dark);
 }
-.ph-trending-count {
-  font-family: var(--ph-font-sans);
-  font-size: 13px;
-  color: var(--ph-text-light);
-}
-
 /* ===== Footer ===== */
 .ph-footer {
   display: flex;

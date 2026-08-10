@@ -56,6 +56,19 @@ const INGEST_GENERATION_TOKENS_512K = 32_768
 const REVIEW_STAGE_MIN_SIGNAL_CHARS = 10_000
 const REVIEW_STAGE_MIN_FILE_BLOCKS = 4
 const AGGREGATE_WIKI_PATHS = ["wiki/index.md", "wiki/overview.md", "wiki/log.md"] as const
+const GRAPH_RELATION_LABELS = [
+  "数据采集",
+  "数据存储",
+  "数据计算",
+  "数据治理",
+  "数据质量",
+  "数据安全",
+  "评测方法",
+  "工程落地",
+  "研究基础",
+  "方法改进",
+  "研究延伸",
+] as const
 
 function appendSavedImageRefsForCaption(content: string, images: SavedImage[]): string {
   if (images.length === 0) return content
@@ -2170,6 +2183,10 @@ export function buildGenerationPrompt(
     `  • created  — ${today} for new pages (YYYY-MM-DD, no quotes)`,
     `  • updated  — ${today} for new pages (same as created)`,
     "  • tags     — array of bare strings: `tags: [microbiology, ai]`",
+    "  • title_zh — concise Chinese title for source pages; preserve standard model/product names",
+    "  • content_kind — for source material, use `paper` or `technical_article`",
+    "  • domain_tags — 1-3 Chinese data-domain labels chosen from: 数据采集, 数据存储, 数据计算, 数据传输, 数据治理, 数据质量, 数据安全, 数据智能",
+    "  • summary — one concise Chinese sentence describing the source's main contribution",
     "  • related  — array of bare wiki page slugs: `related: [foo, bar-baz]`. Do NOT include",
     "               `wiki/`, `.md`, or `[[…]]` here — slugs only.",
     `  • sources  — array of source filenames; MUST include "${sourceFileName}".`,
@@ -2193,6 +2210,7 @@ export function buildGenerationPrompt(
     "",
     "Other rules:",
     "- Use [[wikilink]] syntax in the BODY for cross-references between pages",
+    "- Add an `## 关联关系` section to source pages. Write each important edge as `- [[target-slug]]：关系词`, where the relationship is a short Chinese phrase such as 方法基础、对比方案、性能改进、工程应用 or 研究延伸. These labels are shown directly on the knowledge graph, so never leave them vague.",
     "- If you include images, use wiki-root-relative paths such as `media/source-slug/image.png`; never output absolute filesystem paths.",
     "- Preserve subject boundaries: when a source discusses multiple entities/models/products/methods, keep claims, evaluations, limitations, benchmark results, and recommendations attached to the exact subject they describe.",
     "- Do not merge or generalize a claim about one subject into another subject's page solely because they share terms (for example context window size, benchmark name, dataset, architecture, or feature name).",
@@ -3228,6 +3246,7 @@ async function executeIngestWritesImpl(
     "For wiki/log.md, include a log entry to append. For all other files, output the complete file content.",
     "Do not generate wiki/index.md or wiki/overview.md. The application owns those aggregate files.",
     "Use relative paths from the project root (e.g., wiki/sources/topic.md).",
+    `For paper and technical_article pages, add a \"## 关联关系\" section when the source supports links to another paper or article. Write each relation as \"- [[wiki/path-or-page]]：关系词\". Choose one concise relation from: ${GRAPH_RELATION_LABELS.join("、")}. Do not use the generic label \"主题相似\" and do not invent links that are not supported by the source.`,
     "Do not include any other text outside the FILE blocks.",
   ]
     .filter((line) => line !== undefined)

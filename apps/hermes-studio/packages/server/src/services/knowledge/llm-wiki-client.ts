@@ -33,8 +33,17 @@ function configuredBaseUrl(): string {
   const raw = process.env.LLM_WIKI_BASE_URL?.trim() || DEFAULT_BASE_URL
   const url = new URL(raw)
   const allowedHosts = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
-  if (url.protocol !== 'http:' || !allowedHosts.has(url.hostname)) {
-    throw new Error('LLM_WIKI_BASE_URL must use loopback HTTP')
+  // Default: keep the strict loopback requirement (prevents SSRF to internal
+  // hosts). In a container deployment the webui reaches LLM Wiki via the
+  // Docker network, so opt in explicitly with LLM_WIKI_ALLOW_REMOTE=1.
+  const allowRemote = process.env.LLM_WIKI_ALLOW_REMOTE === '1'
+  if (url.protocol !== 'http:') {
+    throw new Error('LLM_WIKI_BASE_URL must use HTTP')
+  }
+  if (!allowRemote && !allowedHosts.has(url.hostname)) {
+    throw new Error(
+      'LLM_WIKI_BASE_URL must use loopback HTTP (set LLM_WIKI_ALLOW_REMOTE=1 to connect to a non-loopback host)',
+    )
   }
   return url.toString().replace(/\/$/, '')
 }

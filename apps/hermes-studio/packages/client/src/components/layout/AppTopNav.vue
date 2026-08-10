@@ -9,7 +9,6 @@ const router = useRouter()
 const navItems = [
   { label: '首页', name: 'hermes.paperhub' },
   { label: '工作台', name: 'hermes.workbench' },
-  { label: '知识库', name: 'hermes.knowledge' },
   { label: '任务', name: 'hermes.jobs' },
   { label: '对话', name: 'hermes.chat' },
   { label: '历史', name: 'hermes.history' },

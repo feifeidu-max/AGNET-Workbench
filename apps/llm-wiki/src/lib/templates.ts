@@ -28,7 +28,11 @@ const BASE_FRONTMATTER = `All pages must include YAML frontmatter:
 ---
 type: entity | concept | source | query | comparison | synthesis | overview
 title: Human-readable title
+title_zh: 中文标题（来源页必填）
 tags: []
+domain_tags: [数据采集]
+content_kind: paper | technical_article
+summary: 一句话中文摘要
 related: []
 created: YYYY-MM-DD
 updated: YYYY-MM-DD

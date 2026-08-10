@@ -10,3 +10,22 @@ ops/.test-runtime-*/
 # Local PDF corpus used by the knowledge-base validation. Keep the manifest,
 # flow script, and report in Git, but do not distribute source papers.
 validation/knowledge-papers/*.pdf
+
+# =====================
+# Personal / local-only artifacts — do NOT publish to GitHub
+# =====================
+.workbuddy/
+.pi-glla/
+实习/
+output/
+docs/
+build_jinglianwen_report.py
+reorder_jinglianwen_report.py
+rewrite_after_chapter9.py
+rewrite_competitor_section.py
+ops/migrate-data-library.mjs
+
+# Secrets / environment files
+.env
+.env.local
+.env.*.local

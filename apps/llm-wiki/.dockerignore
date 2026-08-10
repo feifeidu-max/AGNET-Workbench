@@ -1,0 +1,11 @@
+# Build artifacts that should not be sent to the Docker build context
+node_modules
+dist
+dist-ssr
+src-tauri/target
+src-tauri/gen
+dist-rc
+*.tsbuildinfo
+.git
+.claude
+.superpowers

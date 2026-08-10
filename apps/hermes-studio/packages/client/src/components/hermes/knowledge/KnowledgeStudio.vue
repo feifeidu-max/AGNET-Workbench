@@ -70,6 +70,7 @@ import {
   type TrustedKnowledgeSource,
 } from '@/api/knowledge-workbench'
 import KnowledgeGraphNetwork from '@/components/hermes/knowledge/KnowledgeGraphNetwork.vue'
+import WechatSourceManager from '@/components/hermes/knowledge/WechatSourceManager.vue'
 
 const MarkdownRenderer = defineAsyncComponent(async () => (
   await import('@/components/hermes/chat/MarkdownRenderer.vue')
@@ -215,6 +216,9 @@ const awaitingDrafts = computed(() => drafts.value.filter(draft => draft.status 
 const dirtyFile = computed(() => activeFileContent.value !== savedFileContent.value)
 const wikiTree = computed(() => toTreeNodes(wikiFiles.value))
 const sourceTree = computed(() => toTreeNodes(sourceFiles.value))
+function isExplicitGraphEdge(edge: Record<string, unknown>): boolean {
+  return String(edge.kind ?? '').toLowerCase() !== 'keyword_similarity'
+}
 const filteredGraphNodes = computed(() => {
   const eligible = graphPaperOnly.value
     ? graph.value.nodes.filter(node => String(node.nodeType ?? node.node_type ?? '').toLowerCase() === 'paper')
@@ -227,7 +231,7 @@ const filteredGraphNodes = computed(() => {
       .filter(node => graphLabel(node).toLowerCase().includes(query))
       .map(graphId),
   )
-  for (const edge of graph.value.edges) {
+  for (const edge of graph.value.edges.filter(isExplicitGraphEdge)) {
     const source = String(edge.source ?? '')
     const target = String(edge.target ?? '')
     if (matchedIds.has(source) && eligibleIds.has(target)) matchedIds.add(target)
@@ -237,9 +241,8 @@ const filteredGraphNodes = computed(() => {
 })
 const filteredGraphEdges = computed(() => {
   const ids = new Set(filteredGraphNodes.value.map(graphId))
-  return graph.value.edges.filter(edge => ids.has(String(edge.source ?? '')) && ids.has(String(edge.target ?? '')))
+  return graph.value.edges.filter(edge => isExplicitGraphEdge(edge) && ids.has(String(edge.source ?? '')) && ids.has(String(edge.target ?? '')))
 })
-const graphSimilarityCount = computed(() => filteredGraphEdges.value.filter(edge => edge.kind === 'keyword_similarity').length)
 const selectedWikiFileName = computed(() => selectedWikiPath.value.split('/').pop() || 'Wiki 页面')
 
 function setActiveView(value: WorkbenchView) {
@@ -551,7 +554,7 @@ async function uploadPdfs(event: Event) {
   target.value = ''
   if (!files.length) return
   if (files.some(file => file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf'))) {
-    message.error('只能上传 PDF 文件')
+    message.error('请上传论文或技术文章的 PDF 文件')
     return
   }
   uploading.value = true
@@ -562,7 +565,7 @@ async function uploadPdfs(event: Event) {
       await uploadKnowledgePdf(file)
       count += 1
     }
-    message.success(`已提交 ${count} 篇论文，完成归纳后将进入审核队列`)
+    message.success(`已提交 ${count} 份知识材料，完成归纳后将进入审核队列`)
   } catch (error) {
     message.error(error instanceof Error ? error.message : `上传在第 ${count + 1} 篇时失败`)
   } finally {
@@ -1009,6 +1012,7 @@ onMounted(async () => {
 
         <section v-else-if="activeView === 'sources'" class="knowledge-view source-view">
           <div class="section-heading"><div><h3>来源库</h3><p>已发布来源和可读文本。PDF 通过引用入口按证据页打开。</p></div><NButton size="small" :loading="maintenanceLoading" @click="rescanSources">重新扫描</NButton></div>
+          <WechatSourceManager />
           <div v-if="trustedSources.length" class="trusted-source-list"><article v-for="source in trustedSources" :key="source.sourceId" class="trusted-source-row"><div><strong>{{ source.title || source.filename }}</strong><span>{{ source.authors.join('、') }}<template v-if="source.year"> · {{ source.year }}</template></span><small>{{ source.filename }} · 已发布 {{ formatTime(source.trustedAt) }}</small></div><div class="candidate-actions"><NButton v-for="pagePath in source.pagePaths.slice(0, 2)" :key="pagePath" size="tiny" @click="openWikiFile(pagePath)">相关 Wiki</NButton><NButton v-if="source.sourceKind === 'pdf'" tag="a" :href="`/api/knowledge/sources/${encodeURIComponent(source.sourceId)}/pdf?page=1`" target="_blank" rel="noopener noreferrer" size="tiny">打开 PDF</NButton></div></article></div>
           <div class="source-layout">
             <aside class="wiki-pane wiki-pane--tree"><NTree block-line selectable :data="sourceTree" :selected-keys="selectedSourcePath ? [selectedSourcePath] : []" @update:selected-keys="selectSourceTree" /><NEmpty v-if="!sourceTree.length" description="暂无来源文件" size="small" /></aside>
@@ -1026,15 +1030,15 @@ onMounted(async () => {
         </section>
 
         <section v-else-if="activeView === 'graph'" class="knowledge-view">
-          <div class="section-heading"><div><h3>知识图谱</h3><p>实线表示 Wiki 显式链接，虚线表示已批准论文之间的关键词相关性；草稿不参与图谱。</p></div><NButton size="small" :loading="graphLoading" @click="loadGraph">刷新图谱</NButton></div>
+          <div class="section-heading"><div><h3>知识图谱</h3><p>仅显示 Wiki 页面中的显式链接，关系词来自文献处理阶段生成的页面关系；草稿不参与图谱。</p></div><NButton size="small" :loading="graphLoading" @click="loadGraph">刷新图谱</NButton></div>
           <NAlert v-if="graphError" type="error" class="knowledge-studio__alert">{{ graphError }}</NAlert>
-          <div class="graph-toolbar"><NInput v-model:value="graphFilter" placeholder="输入论文标题，保留匹配节点及其一跳邻居" /><NCheckbox v-model:checked="graphPaperOnly">仅看论文</NCheckbox><NTag :bordered="false">{{ filteredGraphNodes.length }} 节点 · {{ filteredGraphEdges.length }} 关系</NTag><NTag v-if="graphSimilarityCount" type="warning" :bordered="false">{{ graphSimilarityCount }} 条关键词关系</NTag></div>
+          <div class="graph-toolbar"><NInput v-model:value="graphFilter" placeholder="输入论文标题，保留匹配节点及其一跳邻居" /><NCheckbox v-model:checked="graphPaperOnly">仅看论文</NCheckbox><NTag :bordered="false">{{ filteredGraphNodes.length }} 节点 · {{ filteredGraphEdges.length }} 条 Wiki 显式链接</NTag></div>
           <NSpin :show="graphLoading"><KnowledgeGraphNetwork v-if="filteredGraphNodes.length" :nodes="filteredGraphNodes" :edges="filteredGraphEdges" @open="openGraphNode" /><NEmpty v-else description="暂无知识图谱节点" /></NSpin>
         </section>
 
         <section v-else-if="activeView === 'review'" class="knowledge-view">
-          <div class="section-heading"><div><h3>论文归纳与审核</h3><p>PDF 和研究生成内容都先在此处审核；审核前不可检索、不可引用。</p></div><NButton size="small" :loading="draftsLoading" @click="loadDrafts">刷新</NButton></div>
-          <section class="upload-strip"><div><strong>导入论文 PDF</strong><span>{{ uploadProgress || '可以一次选择多篇 PDF。文件会先进入暂存和审核队列。' }}</span></div><input ref="fileInput" class="visually-hidden" type="file" accept="application/pdf,.pdf" multiple @change="uploadPdfs" /><NButton type="primary" :loading="uploading" @click="openFilePicker">选择 PDF</NButton></section>
+          <div class="section-heading"><div><h3>知识归纳与审核</h3><p>论文和优质技术文章都先在此处审核；审核前不可检索、不可引用。</p></div><NButton size="small" :loading="draftsLoading" @click="loadDrafts">刷新</NButton></div>
+          <section class="upload-strip"><div><strong>导入论文或技术文章 PDF</strong><span>{{ uploadProgress || '公众号文章可在浏览器中打印为 PDF 后导入；所有材料都会先进入暂存和审核队列。' }}</span></div><input ref="fileInput" class="visually-hidden" type="file" accept="application/pdf,.pdf" multiple @change="uploadPdfs" /><NButton type="primary" :loading="uploading" @click="openFilePicker">选择 PDF</NButton></section>
           <div class="subsection-heading"><h4>严格草稿队列</h4><span>{{ drafts.length }} 项</span></div>
           <NSpin :show="draftsLoading"><div v-if="drafts.length" class="draft-list"><article v-for="draft in drafts" :key="draft.id" class="draft-row"><div><strong>{{ draft.title }}</strong><span>{{ draft.fileName }} · {{ formatTime(draft.updatedAt || draft.createdAt) }}</span><p v-if="draft.summary">{{ draft.summary }}</p><small v-if="draft.error" class="error-copy">{{ draft.error }}</small></div><div class="draft-actions"><NTag :type="draftStatusType(draft.status)" :bordered="false">{{ draftStatusLabel(draft.status) }}</NTag><NButton size="tiny" @click="openDraft(draft)">查看</NButton><NButton v-if="draft.status === 'awaiting_review'" size="tiny" type="primary" :loading="actingDraftId === draft.id" @click="approveDraft(draft)">批准</NButton><NButton v-if="draft.status === 'awaiting_review'" size="tiny" @click="reviseDraft = draft; revisionGuidance = ''">退回</NButton><NPopconfirm v-if="draft.status === 'awaiting_review'" @positive-click="rejectDraft(draft)"><template #trigger><NButton size="tiny" type="error" secondary>拒绝</NButton></template>确认拒绝这份草稿？</NPopconfirm></div></article></div><NEmpty v-else description="暂无论文或研究草稿" /></NSpin>
           <div class="subsection-heading"><h4>普通审核事项</h4><NButton size="tiny" text :disabled="!reviews.length" @click="resolveAllReviews">全部处理</NButton></div>

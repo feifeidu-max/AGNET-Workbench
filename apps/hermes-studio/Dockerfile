@@ -42,6 +42,9 @@ ENV HERMES_HOME=/home/agent/.hermes
 ENV HERMES_WEB_UI_MANAGED_GATEWAY=1
 ENV PATH=/opt/hermes/.venv/bin:$PATH
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
+  CMD curl -fsS http://localhost:6060/health || exit 1
+
 EXPOSE 6060
 
 # 强制覆盖基础镜像的默认启动脚本，让镜像本身具备独立运行的能力

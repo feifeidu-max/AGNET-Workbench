@@ -647,6 +647,16 @@ pub fn list_drafts(project_path: &str) -> Result<Vec<IngestDraft>, GateError> {
     list_drafts_unlocked(project_path)
 }
 
+/// Resume staged drafts after a headless service restart. The queue normally
+/// advances when an upload or compilation finishes, but an application exit
+/// can leave generated proposals in `uploaded` while no new request arrives
+/// to kick the worker.
+pub fn resume_queued_drafts(project_path: String) {
+    if !project_path.trim().is_empty() {
+        kick_queue(project_path);
+    }
+}
+
 #[tauri::command]
 pub fn pending_ingest_publications(project_path: String) -> Result<Vec<IngestDraft>, String> {
     list_drafts(&project_path)
@@ -1089,7 +1099,15 @@ fn kick_queue(project_path: String) {
     let selected = (|| -> Result<Option<String>, GateError> {
         let _guard = gate_lock()?;
         let drafts = list_drafts_unlocked(&project_path)?;
-        if drafts.iter().any(|draft| draft.status.blocks_queue()) {
+        // Generated Studio pages are cheap, already-structured proposals. A
+        // generated draft waiting for human review must not prevent the next
+        // generated article from reaching the same review queue. Keep the
+        // single-worker guard for active work and for PDF review stages.
+        if drafts.iter().any(|draft| {
+            draft.status.blocks_queue()
+                && !(draft.source_kind == "generated"
+                    && draft.status == DraftStatus::AwaitingReview)
+        }) {
             return Ok(None);
         }
         let native_compile = native_compile_enabled();
@@ -1215,6 +1233,11 @@ fn process_draft(project_path: String, draft_id: String) {
             }
         }
         eprintln!("[ingest-gate] draft {draft_id} failed: {}", error.message);
+        kick_queue(project_path);
+    } else {
+        // Continue a batch after a generated proposal reaches review. Without
+        // this kick, only the first article in a discovery response is ever
+        // promoted from `uploaded` to `awaiting_review`.
         kick_queue(project_path);
     }
 }

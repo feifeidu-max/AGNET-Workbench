@@ -60,8 +60,12 @@ function openApiRelay() {
 <template>
   <div class="page-sidebar-nav">
     <div class="workspace-shortcuts" aria-label="常用功能">
-      <RouteLinkItem class="workspace-shortcut" :to="{ name: 'hermes.workbench' }" title="个人工作台">
+      <RouteLinkItem class="workspace-shortcut" :to="{ name: 'hermes.workbench' }" title="数据知识库">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
+        <span>数据知识库</span>
+      </RouteLinkItem>
+      <RouteLinkItem class="workspace-shortcut" :to="{ name: 'hermes.personalWorkbench' }" title="个人工作台">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4h6v6H4z" /><path d="M14 4h6v6h-6z" /><path d="M4 14h6v6H4z" /><path d="M14 14h6v6h-6z" /></svg>
         <span>工作台</span>
       </RouteLinkItem>
       <RouteLinkItem class="workspace-shortcut" :to="{ name: 'hermes.chat' }" :active="active === 'chat' || active === 'history' || active === 'group'" title="Hermes 对话">
