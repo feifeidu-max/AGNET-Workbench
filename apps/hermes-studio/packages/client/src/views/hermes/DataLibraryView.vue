@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NPopconfirm, useMessage } from 'naive-ui'
-import { deleteKnowledgeFile } from '@/api/knowledge-workbench'
+import { deleteKnowledgeFile, fetchKnowledgeFile } from '@/api/knowledge-workbench'
 import {
   fetchKnowledgeGraph,
   fetchWorkbenchSummary,
@@ -435,6 +435,57 @@ async function deleteKbItem(item: DisplayPaper) {
   }
 }
 
+/** 从 wiki 页面 frontmatter 解析字段（source_url / sourceId）。 */
+function parseFrontmatterField(content: string, key: string): string {
+  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!m) return ''
+  const line = m[1].split(/\r?\n/).find((l) => l.startsWith(key + ':'))
+  if (!line) return ''
+  const value = line.slice(key.length + 1).trim()
+  if (value.startsWith('"')) return value.replace(/^"|"$/g, '').replace(/\\"/g, '"')
+  return value
+}
+
+/** KB 条目原文 URL 缓存（path → url | null） */
+const kbUrlCache = new Map<string, string | null>()
+
+/**
+ * 解析知识库条目的“原文”：
+ * 1) frontmatter 的 source_url（公众号原文 / DOI 链接等外部地址）；
+ * 2) 无 source_url 但有 sourceId 的 PDF 论文 → 打开本地 raw/sources 中的 PDF；
+ * 3) 都没有 → null。
+ */
+async function resolveKbOpenUrl(item: DisplayPaper): Promise<string | null> {
+  const path = item.raw && typeof item.raw.path === 'string' ? item.raw.path : ''
+  if (!path) return null
+  if (kbUrlCache.has(path)) return kbUrlCache.get(path) ?? null
+  let url: string | null = null
+  try {
+    const file = await fetchKnowledgeFile(path)
+    const sourceUrl = parseFrontmatterField(file.content, 'source_url')
+    if (sourceUrl) {
+      url = sourceUrl
+    } else {
+      const sourceId = parseFrontmatterField(file.content, 'sourceId')
+      if (sourceId) url = `/api/knowledge/sources/${encodeURIComponent(sourceId)}/pdf`
+    }
+  } catch {
+    url = null
+  }
+  kbUrlCache.set(path, url)
+  return url
+}
+
+async function openKbSource(item: DisplayPaper | null | undefined) {
+  if (!item) return
+  const url = await resolveKbOpenUrl(item)
+  if (url) {
+    window.open(url, '_blank', 'noopener')
+  } else {
+    message.info('该条目没有可打开的原文链接或本地 PDF')
+  }
+}
+
 const stats = computed(() => ({
   kb: kbPapers.value.length,
   papers: kbPapers.value.filter((p) => p.kind !== 'article').length,
@@ -574,7 +625,8 @@ onMounted(() => {
                 <span class="ph-card-date">{{ item.year ?? '—' }}<span v-if="item.newlyFound" class="ph-newly" :title="'本次刷新搜出 · ' + (item.foundAt ? formatGeneratedAt(item.foundAt) : '')">新发现</span></span>
               </div>
               <h3 class="ph-card-title">
-                <a v-if="item.url" :href="item.url" target="_blank" rel="noopener" @click.stop>{{ item.title }}</a>
+                <a v-if="item.url" :href="item.url" target="_blank" rel="noopener" @click.stop :title="'打开原文：' + item.url">{{ item.title }}</a>
+                <a v-else-if="item.source === 'kb'" href="#" :title="item.kind === 'paper' ? '打开原文 / 本地 PDF' : '打开原文（公众号文章）'" @click.stop.prevent="openKbSource(item)">{{ item.title }}</a>
                 <template v-else>{{ item.title }}</template>
               </h3>
               <p v-if="item.originalTitle && item.originalTitle !== item.title" class="ph-original-title">{{ item.originalTitle }}</p>
@@ -645,7 +697,11 @@ onMounted(() => {
               </span>
               <span class="ph-card-date">{{ item?.year ?? '—' }}<span v-if="item?.newlyFound" class="ph-newly" :title="'本次刷新搜出 · ' + (item?.foundAt ? formatGeneratedAt(item.foundAt) : '')">新发现</span></span>
             </div>
-            <h3 class="ph-card-title" :class="item?.id !== selected?.id && 'compact-title'">{{ item?.title }}</h3>
+            <h3 class="ph-card-title" :class="item?.id !== selected?.id && 'compact-title'">
+              <a v-if="item?.url" :href="item.url" target="_blank" rel="noopener" @click.stop :title="'打开原文：' + item.url">{{ item?.title }}</a>
+              <a v-else-if="item?.source === 'kb'" href="#" :title="item?.kind === 'paper' ? '打开原文 / 本地 PDF' : '打开原文（公众号文章）'" @click.stop.prevent="openKbSource(item)">{{ item?.title }}</a>
+              <template v-else>{{ item?.title }}</template>
+            </h3>
             <p class="ph-card-authors">{{ (item?.authors ?? []).slice(0, 3).join('、') }}</p>
             <p v-if="item?.id === selected?.id" class="ph-card-abstract">{{ item?.summary || '—' }}</p>
           </article>
