@@ -26,7 +26,6 @@ import {
   reviseKnowledgeDraft,
   searchReadingCandidates,
   searchTrustedKnowledge,
-  selectKnowledgeProject,
   uploadKnowledgePdf,
   type KnowledgeDraft,
   type KnowledgeDraftDetail,
@@ -36,7 +35,6 @@ import {
   type ReadingCandidate,
 } from '@/api/workbench'
 import {
-  createManagedKnowledgeProject,
   createMissingKnowledgePage,
   deleteKnowledgeFile,
   removeKnowledgeDraft,
@@ -97,15 +95,7 @@ const message = useMessage()
 const viewItems: Array<{ key: WorkbenchView; label: string }> = [
   { key: 'overview', label: '概览' },
   { key: 'wiki', label: 'Wiki' },
-  { key: 'sources', label: '来源库' },
-  { key: 'search', label: '检索' },
-  { key: 'graph', label: '知识图谱' },
   { key: 'review', label: '审核' },
-  { key: 'chat', label: '对话' },
-  { key: 'research', label: '深度研究' },
-  { key: 'lint', label: '检查' },
-  { key: 'skills', label: 'Skills' },
-  { key: 'settings', label: '设置' },
 ]
 
 const legacyViews: Record<string, WorkbenchView> = {
@@ -113,7 +103,7 @@ const legacyViews: Record<string, WorkbenchView> = {
   drafts: 'review',
   trusted: 'search',
   qa: 'chat',
-  candidates: 'research',
+  candidates: 'review',
 }
 
 function resolveView(value: unknown): WorkbenchView {
@@ -126,11 +116,6 @@ const activeView = ref<WorkbenchView>(resolveView(route.query.tab))
 const workspace = ref<KnowledgeWorkspace | null>(null)
 const workspaceLoading = ref(false)
 const workspaceError = ref('')
-const selectedProjectId = ref<string | null>(null)
-const switchingProject = ref(false)
-const newProjectOpen = ref(false)
-const newProjectName = ref('')
-const creatingProject = ref(false)
 
 const wikiFiles = ref<KnowledgeFileNode[]>([])
 const sourceFiles = ref<KnowledgeFileNode[]>([])
@@ -210,10 +195,6 @@ const settings = ref<KnowledgeSettings | null>(null)
 const settingsLoading = ref(false)
 const maintenanceLoading = ref(false)
 
-const projectOptions = computed(() => (workspace.value?.projects || []).map(project => ({
-  label: project.name,
-  value: project.id,
-})))
 const awaitingDrafts = computed(() => drafts.value.filter(draft => draft.status === 'awaiting_review'))
 const dirtyFile = computed(() => activeFileContent.value !== savedFileContent.value)
 const wikiTree = computed(() => toTreeNodes(wikiFiles.value))
@@ -328,60 +309,11 @@ async function loadWorkspace() {
   try {
     const next = await fetchKnowledgeWorkspace()
     workspace.value = next
-    selectedProjectId.value = next.currentProject?.id || next.projects.find(project => project.current)?.id || null
   } catch (error) {
     workspaceError.value = error instanceof Error ? error.message : '无法读取知识库服务状态'
   } finally {
     workspaceLoading.value = false
   }
-}
-
-async function createProject() {
-  const name = newProjectName.value.trim()
-  if (!name || creatingProject.value) return
-  creatingProject.value = true
-  try {
-    await createManagedKnowledgeProject(name)
-    newProjectName.value = ''
-    newProjectOpen.value = false
-    await resetProjectData()
-    message.success('已新建并切换到知识库项目')
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '新建项目失败')
-  } finally {
-    creatingProject.value = false
-  }
-}
-
-async function switchProject() {
-  const id = selectedProjectId.value
-  if (!id || id === workspace.value?.currentProject?.id || switchingProject.value) return
-  switchingProject.value = true
-  try {
-    await selectKnowledgeProject(id)
-    await resetProjectData()
-    message.success('已切换当前知识库')
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '切换项目失败')
-    await loadWorkspace()
-  } finally {
-    switchingProject.value = false
-  }
-}
-
-async function resetProjectData() {
-  selectedWikiPath.value = ''
-  selectedSourcePath.value = ''
-  activeFileContent.value = ''
-  savedFileContent.value = ''
-  activeFileRevision.value = ''
-  links.value = { outgoing: [], backlinks: [], missing: [] }
-  graph.value = { nodes: [], edges: [] }
-  chatSessions.value = []
-  chatMessages.value = []
-  activeChatSessionId.value = ''
-  await Promise.all([loadWorkspace(), loadFiles(), loadDrafts(), loadSkills()])
-  await ensureViewLoaded(activeView.value)
 }
 
 async function loadFiles() {
@@ -914,18 +846,7 @@ onMounted(async () => {
         <h2>LLM Wiki</h2>
         <p>论文、来源和研究结论在 Studio 中统一管理。未审核内容不会进入正式 Wiki 或被检索引用。</p>
       </div>
-      <div class="knowledge-studio__header-actions">
-        <NSelect
-          v-model:value="selectedProjectId"
-          :options="projectOptions"
-          :loading="workspaceLoading"
-          :disabled="switchingProject || !projectOptions.length"
-          class="project-select"
-          aria-label="切换知识库项目"
-        />
-        <NButton size="small" :loading="switchingProject" :disabled="!selectedProjectId" @click="switchProject">切换</NButton>
-        <NButton size="small" type="primary" @click="newProjectOpen = true">新建项目</NButton>
-      </div>
+
     </header>
 
     <NAlert v-if="workspaceError" type="error" class="knowledge-studio__alert">
@@ -963,12 +884,8 @@ onMounted(async () => {
             <button type="button" class="overview-metric" @click="setActiveView('wiki')">
               <span>正式 Wiki</span><strong>{{ wikiFiles.length }}</strong><small>仅显示已发布页面</small>
             </button>
-            <button type="button" class="overview-metric" @click="setActiveView('sources')">
-              <span>来源库</span><strong>{{ sourceFiles.length }}</strong><small>原始来源和摘要</small>
-            </button>
-            <button type="button" class="overview-metric" @click="setActiveView('settings')">
-              <span>服务状态</span><strong>{{ workspace?.service.status === 'running' ? '运行中' : workspace?.service.status || '未知' }}</strong><small>{{ workspace?.service.retrievalMode || 'keyword_graph' }}</small>
-            </button>
+
+
           </div>
           <section class="overview-band">
             <div>
@@ -1093,11 +1010,6 @@ onMounted(async () => {
         </section>
       </main>
     </div>
-
-    <NModal v-model:show="newProjectOpen" preset="dialog" title="新建知识库项目" positive-text="创建" negative-text="取消" :positive-button-props="{ loading: creatingProject, disabled: !newProjectName.trim() }" @positive-click="createProject">
-      <NInput v-model:value="newProjectName" placeholder="项目名称" maxlength="80" />
-      <p class="modal-copy">项目将创建在 LLM Wiki 的受控本地目录中，并由 Studio 纳入统一备份和管理。</p>
-    </NModal>
 
     <NModal v-model:show="createMissingOpen" preset="dialog" title="创建 Wiki 页面" positive-text="创建" negative-text="取消" :positive-button-props="{ loading: creatingMissingPage, disabled: !missingPageTitle.trim() }" @positive-click="createMissingPage">
       <NInput v-model:value="missingPageTitle" placeholder="页面标题" maxlength="200" />
