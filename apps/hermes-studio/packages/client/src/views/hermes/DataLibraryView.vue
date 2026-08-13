@@ -1,15 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { NPopconfirm, useMessage } from 'naive-ui'
+import { deleteKnowledgeFile } from '@/api/knowledge-workbench'
 import {
   fetchKnowledgeGraph,
   fetchWorkbenchSummary,
-  refreshPaperRecommendations,
+  refreshPaperRecommendationsAndWait,
   type KnowledgeGraph,
   type PaperRecommendation,
   type PaperRecommendationsPayload,
+  type WorkbenchSummary,
 } from '@/api/workbench'
 import KnowledgeGraphNetwork from '@/components/hermes/knowledge/KnowledgeGraphNetwork.vue'
+import {
+  domainTagColor,
+  normalizeWikiTags,
+  paperCategory,
+} from '@/utils/paperCategories'
 
 interface DisplayPaper {
   id: string
@@ -20,8 +28,12 @@ interface DisplayPaper {
   category: string
   categoryColor: { bg: string; fg: string }
   source: 'kb' | 'recommend'
+  /** 知识库条目类型：论文 / 公众号文章（technical_article） */
+  kind?: 'paper' | 'article'
   summary: string
   tags: string[]
+  newlyFound?: boolean
+  foundAt?: string | null
   url?: string
   provider?: string
   venue?: string
@@ -38,8 +50,11 @@ const route = useRoute()
 
 const loading = ref(true)
 const error = ref('')
+const refreshError = ref('')
+const refreshMessage = ref('')
 const graph = ref<KnowledgeGraph>({ nodes: [], edges: [] })
 const payload = ref<PaperRecommendationsPayload | null>(null)
+const workbench = ref<WorkbenchSummary | null>(null)
 const refreshing = ref(false)
 
 const searchText = ref((route.query.q as string) || '')
@@ -93,23 +108,37 @@ function nodeId(node: Record<string, unknown>): string {
   return text(node.id ?? node.path)
 }
 
-function isPaper(node: Record<string, unknown>): boolean {
+function isKbEntry(node: Record<string, unknown>): 'paper' | 'article' | null {
   const explicit = text(node.contentKind ?? node.content_kind).toLowerCase()
   const type = text(node.nodeType ?? node.node_type ?? node.type).toLowerCase()
-  return explicit === 'paper' || type === 'paper'
+  if (explicit === 'paper' || type === 'paper') return 'paper'
+  // 已批准发布的公众号文章 / 技术文章（wiki/sources/*.md）也是可信知识库内容
+  if (explicit === 'technical_article' || explicit === 'article' || type === 'source') return 'article'
+  return null
 }
 
 function isWikiEdge(edge: Record<string, unknown>): boolean {
-  return text(edge.kind, 'wikilink').toLowerCase() !== 'keyword_similarity'
+  const kind = text(edge.kind, 'wikilink').toLowerCase()
+  // 关键词相似边（keyword_graph 检索模式下文章/论文之间的主要连接）也是图谱连线
+  if (kind !== 'wikilink' && kind !== 'keyword_similarity') return false
+  // 排除只与系统页（index/overview/log/query/purpose）相连的入口链接，
+  // 否则文章会“孤零零”只剩一条来自 index 的边
+  const s = text(edge.source).toLowerCase()
+  const t = text(edge.target).toLowerCase()
+  const isSystem = (id: string) => ['index', 'overview', 'log', 'query', 'purpose']
+    .some((n) => id === n || id.startsWith(n + '/'))
+  return !isSystem(s) && !isSystem(t)
 }
 
 function extractKb(node: Record<string, unknown>): DisplayPaper | null {
   const id = nodeId(node)
-  if (!id || !isPaper(node)) return null
+  const kind = isKbEntry(node)
+  if (!id || !kind) return null
   const originalTitle = text(node.label ?? node.title ?? node.name, '未命名论文')
   const title = text(node.titleZh ?? node.title_zh, originalTitle)
   const rawSummary = text(node.summary)
-  const tags = stringList(node.tags ?? node.domainTags ?? node.domain_tags).slice(0, 4)
+  // 标签白名单归一化：只保留 LLM Wiki 固定中文体系（数据采集/存储/计算/传输/治理/质量/安全/智能）。
+  const tags = normalizeWikiTags(stringList(node.tags ?? node.domainTags ?? node.domain_tags))
   const category = tags[0] || '知识库'
   const rawYear = node.year
   return {
@@ -121,6 +150,7 @@ function extractKb(node: Record<string, unknown>): DisplayPaper | null {
     category,
     categoryColor: tagFor(category),
     source: 'kb',
+    kind,
     summary: rawSummary.startsWith('<!--') || rawSummary.includes('evidence-locators') ? '' : rawSummary,
     tags,
     raw: node,
@@ -128,17 +158,22 @@ function extractKb(node: Record<string, unknown>): DisplayPaper | null {
 }
 
 function extractRec(it: PaperRecommendation): DisplayPaper {
-  const category = it.venue?.trim() || '论文'
+  // 推荐论文的标签来自服务端按 LLM-Wiki 同款关键词规则提取的中文域标签（it.tags），
+  // 固定为 数据采集/存储/计算/治理/质量/安全/传输/智能 之一，不会一篇论文多一个标签。
+  // 英文会议名只保留在 venue 字段供卡片底部展示，绝不当标签。
+  const category = paperCategory(it.tags, `${it.title} ${it.abstract ?? ''}`)
   return {
     id: it.id,
     title: it.title,
     authors: it.authors ?? [],
     year: it.year ?? null,
     category,
-    categoryColor: tagFor(category),
+    categoryColor: domainTagColor(category),
     source: 'recommend',
     summary: it.reason || it.abstract || '',
-    tags: it.venue ? [it.venue] : [],
+    tags: normalizeWikiTags(it.tags as unknown[] | undefined | null),
+    newlyFound: it.newlyFound === true,
+    foundAt: it.foundAt ?? null,
     url: it.url ?? undefined,
     provider: it.provider ?? undefined,
     venue: it.venue ?? undefined,
@@ -315,7 +350,10 @@ async function loadHome() {
       fetchWorkbenchSummary().catch(() => null),
     ])
     if (g) graph.value = g
-    if (summary) payload.value = summary.paperRecommendations ?? null
+    if (summary) {
+      workbench.value = summary
+      payload.value = summary.paperRecommendations ?? null
+    }
     if (!g) error.value = '知识库加载失败'
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '数据加载失败'
@@ -324,26 +362,101 @@ async function loadHome() {
   }
 }
 
+function formatGeneratedAt(value: string | null | undefined): string {
+  if (!value) return '尚未生成'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '尚未生成'
+  return date.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+/** 手动执行「论文推荐（本地知识库 · 顶会优先）」任务：
+ *  后端会基于 LLM Wiki 知识库重新检索外部顶会论文并回写 paper-recommendations.json。 */
 async function onRefresh() {
+  if (refreshing.value) return
   refreshing.value = true
+  refreshError.value = ''
+  refreshMessage.value = '正在执行论文推荐任务（基于本地知识库检索顶会论文）…'
   try {
-    const data = await refreshPaperRecommendations()
+    // 手动执行“论文推荐（本地知识库 · 顶会优先）”任务并轮询等待结果
+    const data = await refreshPaperRecommendationsAndWait()
     payload.value = data
+    refreshMessage.value = data.status === 'failed'
+      ? `论文推荐任务执行失败：${data.error || '未知错误'}`
+      : (() => {
+          const newCount = (data.items ?? []).filter((it) => it.newlyFound === true).length
+          const newHint = newCount > 0 ? `（本次新增 ${newCount} 篇，已标注“新发现”）` : '（本次无新增论文）'
+          return `论文推荐任务已执行：${data.items.length} 篇${data.topVenueOnly ? '顶会' : '数据方向'}推荐${newHint} · ${formatGeneratedAt(data.generatedAt)}`
+        })()
+    if (data.status === 'failed') refreshError.value = data.error || '论文推荐任务执行失败'
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '刷新失败'
+    refreshError.value = reason instanceof Error ? reason.message : '刷新失败'
+    refreshMessage.value = `论文推荐任务执行失败：${refreshError.value}`
   } finally {
     refreshing.value = false
   }
 }
 
+const message = useMessage()
+const deletingId = ref('')
+
+/** 删除已入库的论文/文章（wiki 页面；删除前会留历史快照，可从 Wiki 历史恢复）。 */
+async function deleteKbItem(item: DisplayPaper) {
+  const path = item.raw && typeof item.raw.path === 'string' ? item.raw.path : ''
+  if (!path) {
+    message.error('缺少 Wiki 路径，无法删除')
+    return
+  }
+  deletingId.value = item.id
+  try {
+    await deleteKnowledgeFile(path)
+    message.success(`已删除「${item.title}」`)
+    if (selectedId.value === item.id) selectedId.value = null
+    // 轻量刷新：图谱 + 工作台摘要（不闪整页加载态）
+    const [g, summary] = await Promise.all([
+      fetchKnowledgeGraph().catch(() => null),
+      fetchWorkbenchSummary().catch(() => null),
+    ])
+    if (g) graph.value = g
+    if (summary) {
+      workbench.value = summary
+      payload.value = summary.paperRecommendations ?? null
+    }
+  } catch (reason) {
+    message.error(reason instanceof Error ? reason.message : '删除失败')
+  } finally {
+    deletingId.value = ''
+  }
+}
+
 const stats = computed(() => ({
   kb: kbPapers.value.length,
+  papers: kbPapers.value.filter((p) => p.kind !== 'article').length,
+  articles: kbPapers.value.filter((p) => p.kind === 'article').length,
   recommendations: recPapers.value.length,
 }))
 
 const heroStats = computed(
-  () => `${stats.value.recommendations} 篇${payload.value?.topVenueOnly === false ? '数据方向' : '顶会'}推荐 · ${stats.value.kb} 篇知识库论文 · 点击任意论文查看知识图谱`,
+  () => `${stats.value.papers} 篇论文 · ${stats.value.articles} 篇文章 · ${stats.value.recommendations} 篇${payload.value?.topVenueOnly === false ? '数据方向' : '顶会'}推荐 · 点击任意条目查看知识图谱`,
 )
+
+// 后端/模型服务状态条：确认 Hermes 是否随启动运行、API Key/Base URL 是否生效
+const serviceById = (id: string) => workbench.value?.services.find((s) => s.id === id)
+const serviceStatusText = (id: string): { label: string; ok: boolean; detail?: string } => {
+  const s = serviceById(id)
+  if (!s) return { label: '未检查', ok: false }
+  const ok = s.status === 'ok'
+  return { label: ok ? '正常' : (s.status === 'degraded' ? '部分可用' : '异常'), ok, detail: s.detail }
+}
+const hermesStatus = computed(() => serviceStatusText('hermes-agent'))
+const modelStatus = computed(() => serviceStatusText('model-provider'))
+const wikiStatus = computed(() => serviceStatusText('llm-wiki'))
 
 const trending = computed<TrendingTopic[]>(() => TRENDING_TOPICS)
 
@@ -374,6 +487,19 @@ onMounted(() => {
         <input v-model="searchText" type="text" placeholder="输入论文标题、关键词或作者姓名" />
       </div>
       <p class="ph-hero-stats">{{ heroStats }}</p>
+      <div class="ph-service-strip" aria-label="后端服务状态">
+        <span class="ph-service-item" :class="{ ok: hermesStatus.ok }">
+          <i class="ph-service-dot" /> Hermes 后端 {{ hermesStatus.label }}
+          <em v-if="hermesStatus.detail" class="ph-service-detail" :title="hermesStatus.detail">{{ hermesStatus.detail }}</em>
+        </span>
+        <span class="ph-service-item" :class="{ ok: modelStatus.ok }">
+          <i class="ph-service-dot" /> 模型服务 {{ modelStatus.label }}
+          <em v-if="modelStatus.detail" class="ph-service-detail" :title="modelStatus.detail">{{ modelStatus.detail }}</em>
+        </span>
+        <span class="ph-service-item" :class="{ ok: wikiStatus.ok }">
+          <i class="ph-service-dot" /> LLM Wiki {{ wikiStatus.label }}
+        </span>
+      </div>
     </section>
 
     <!-- ===== Filter Bar ===== -->
@@ -421,11 +547,13 @@ onMounted(() => {
         <div class="ph-section-header">
           <h2 class="ph-section-title">论文与知识图谱</h2>
           <div class="ph-section-actions">
+            <span v-if="payload?.generatedAt" class="ph-refresh-hint">上次更新 {{ formatGeneratedAt(payload.generatedAt) }}</span>
             <button class="ph-refresh" :disabled="refreshing" @click="onRefresh">
-              {{ refreshing ? '生成中…' : '刷新推荐' }}
+              {{ refreshing ? '执行任务中…' : '刷新推荐' }}
             </button>
           </div>
         </div>
+        <p v-if="refreshMessage" class="ph-refresh-message" :class="{ 'is-error': refreshError }">{{ refreshMessage }}</p>
 
         <div class="ph-card-grid">
           <div v-for="row in Math.ceil(filtered.length / 3)" :key="row" class="ph-card-row">
@@ -438,12 +566,12 @@ onMounted(() => {
             >
               <div class="ph-card-top-row">
                 <span class="ph-source-badge" :class="item.source === 'kb' ? 'kb' : 'rec'">
-                  {{ item.source === 'kb' ? '知识库' : '推荐' }}
+                  {{ item.source === 'kb' ? (item.kind === 'paper' ? '论文' : '文章') : '推荐' }}
                 </span>
                 <span class="ph-card-tag" :style="{ background: item.categoryColor.bg, color: item.categoryColor.fg }">
                   {{ item.category }}
                 </span>
-                <span class="ph-card-date">{{ item.year ?? '—' }}</span>
+                <span class="ph-card-date">{{ item.year ?? '—' }}<span v-if="item.newlyFound" class="ph-newly" :title="'本次刷新搜出 · ' + (item.foundAt ? formatGeneratedAt(item.foundAt) : '')">新发现</span></span>
               </div>
               <h3 class="ph-card-title">
                 <a v-if="item.url" :href="item.url" target="_blank" rel="noopener" @click.stop>{{ item.title }}</a>
@@ -456,7 +584,8 @@ onMounted(() => {
                 <div class="ph-card-metrics">
                   <span v-if="item.venue">会议 {{ item.venue }}</span>
                   <span v-if="item.provider">来源 {{ item.provider }}</span>
-                  <span v-if="item.source === 'kb'">知识库论文</span>
+                  <span v-if="item.source === 'kb'">{{ item.kind === 'paper' ? '知识库论文' : '公众号文章' }}</span>
+                  <span v-if="item.foundAt" class="ph-found-at">搜出于 {{ formatGeneratedAt(item.foundAt) }}</span>
                 </div>
                 <svg
                   v-if="item.source === 'recommend'"
@@ -469,6 +598,28 @@ onMounted(() => {
                 >
                   <path d="M6 4H18V20L12 16L6 20V4Z" :stroke="favorites.has(item.id) ? '#003B5C' : '#999999'" :fill="favorites.has(item.id) ? '#003B5C' : 'none'" stroke-width="2" stroke-linejoin="round" />
                 </svg>
+                <NPopconfirm
+                  v-if="item.source === 'kb'"
+                  :positive-text="deletingId === item.id ? '删除中…' : '确认删除'"
+                  negative-text="取消"
+                  :disabled="deletingId === item.id"
+                  @positive-click="deleteKbItem(item)"
+                >
+                  <template #trigger>
+                    <button
+                      type="button"
+                      class="ph-card-delete"
+                      :disabled="deletingId === item.id"
+                      :title="`删除${item.kind === 'paper' ? '该论文' : '该文章'}`"
+                      @click.stop
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M4 7H20M9 7V5C9 4.44772 9.44772 4 10 4H14C14.5523 4 15 4.44772 15 5V7M7 7L8 19C8 19.5523 8.44772 20 9 20H15C15.5523 20 16 19.5523 16 19L17 7M10 11V16M14 11V16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </button>
+                  </template>
+                  确认删除「{{ item.title }}」？删除后可从 Wiki 文件历史快照恢复。
+                </NPopconfirm>
               </div>
             </article>
           </div>
@@ -487,12 +638,12 @@ onMounted(() => {
           >
             <div class="ph-card-top-row">
               <span class="ph-source-badge" :class="item?.source === 'kb' ? 'kb' : 'rec'">
-                {{ item?.source === 'kb' ? '知识库' : '推荐' }}
+                {{ item?.source === 'kb' ? (item?.kind === 'paper' ? '论文' : '文章') : '推荐' }}
               </span>
               <span class="ph-card-tag" :style="{ background: item?.categoryColor.bg, color: item?.categoryColor.fg }">
                 {{ item?.category }}
               </span>
-              <span class="ph-card-date">{{ item?.year ?? '—' }}</span>
+              <span class="ph-card-date">{{ item?.year ?? '—' }}<span v-if="item?.newlyFound" class="ph-newly" :title="'本次刷新搜出 · ' + (item?.foundAt ? formatGeneratedAt(item.foundAt) : '')">新发现</span></span>
             </div>
             <h3 class="ph-card-title" :class="item?.id !== selected?.id && 'compact-title'">{{ item?.title }}</h3>
             <p class="ph-card-authors">{{ (item?.authors ?? []).slice(0, 3).join('、') }}</p>
@@ -524,7 +675,7 @@ onMounted(() => {
                 @open="selectGraphNode"
               />
             </div>
-            <div v-else class="ph-graph-empty">该论文暂无关联的 Wiki 知识节点</div>
+            <div v-else class="ph-graph-empty">该条目暂无关联的 Wiki 知识节点</div>
           </div>
 
           <div v-else class="ph-graph-svg-container">
@@ -804,6 +955,20 @@ onMounted(() => {
   cursor: pointer;
   &:hover { border-color: var(--ph-navy); color: var(--ph-navy); }
   &:disabled { opacity: 0.6; cursor: default; }
+}
+.ph-refresh-hint {
+  font-family: var(--ph-font-sans);
+  font-size: 12px;
+  color: var(--ph-text-medium);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.ph-refresh-message {
+  margin: 0;
+  font-family: var(--ph-font-sans);
+  font-size: 13px;
+  color: #1B5E20;
+  &.is-error { color: #b91c1c; }
 }
 .ph-section-link {
   font-family: var(--ph-font-sans);
@@ -1188,5 +1353,120 @@ onMounted(() => {
   .ph-footer { padding: 32px 24px; flex-direction: column; gap: 16px; text-align: center; }
   .ph-graph-left { flex-direction: column; }
   .ph-graph-left .ph-paper-card { min-width: auto; }
+}
+
+/* ===== 后端服务状态条 ===== */
+.ph-service-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  justify-content: center;
+  font-family: var(--ph-font-sans);
+  font-size: 12px;
+  color: #666;
+}
+.ph-service-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #e6e5d6;
+  border-radius: 100px;
+  padding: 4px 12px;
+  color: #c0392b;
+}
+.ph-service-item.ok {
+  color: #1b5e20;
+  border-color: #cfe3d2;
+}
+.ph-service-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c0392b;
+  flex-shrink: 0;
+}
+.ph-service-item.ok .ph-service-dot {
+  background: #1f9d55;
+}
+.ph-service-detail {
+  font-style: normal;
+  color: #999;
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html.dark .ph-service-item {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+html.dark .ph-service-detail {
+  color: #888;
+}
+
+/* ===== 新发现角标（本次刷新新检索到的论文） ===== */
+.ph-newly {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 4px;
+  background: #e65100;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+  animation: ph-newly-pulse 2s ease-in-out infinite;
+}
+@keyframes ph-newly-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.35); }
+  50% { box-shadow: 0 0 0 4px rgba(230, 81, 0, 0); }
+}
+
+.ph-found-at {
+  color: #e65100;
+  font-weight: 500;
+}
+
+/* ===== 删除已入库论文/文章按钮 ===== */
+.ph-card-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e6e5d6;
+  border-radius: 8px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.ph-card-delete:hover {
+  border-color: #e65100;
+  color: #e65100;
+  background: #fff5ef;
+}
+.ph-card-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ph-card-delete svg {
+  width: 15px;
+  height: 15px;
+}
+html.dark .ph-card-delete {
+  background: #252525;
+  border-color: #3a3a3a;
+  color: #888;
+}
+html.dark .ph-card-delete:hover {
+  border-color: #e65100;
+  color: #e65100;
+  background: #3a2a20;
 }
 </style>

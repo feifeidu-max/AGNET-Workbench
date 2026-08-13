@@ -2,11 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { fetchWorkbenchSummary, refreshPaperRecommendations, type PaperRecommendation, type PaperRecommendationsPayload } from '@/api/workbench'
+import { chineseCategoryForVenue, categoryColorForVenue } from '@/utils/paperCategories'
 
 const route = useRoute()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
+const refreshError = ref<string | null>(null)
+const refreshMessage = ref<string | null>(null)
 const payload = ref<PaperRecommendationsPayload | null>(null)
 const refreshing = ref(false)
 
@@ -17,25 +20,23 @@ const sortBy = ref<'hot' | 'newest' | 'oldest'>('hot')
 const selectedId = ref<string | null>(null)
 const favorites = ref<Set<string>>(new Set())
 
-const PALETTE = [
-  { bg: '#E8EFF4', fg: '#003B5C' },
-  { bg: '#E3F2FD', fg: '#0D47A1' },
-  { bg: '#F3E5F5', fg: '#6A1B9A' },
-  { bg: '#FFF3E0', fg: '#E65100' },
-  { bg: '#E0F7FA', fg: '#006064' },
-  { bg: '#FFF8E1', fg: '#F57F17' },
-  { bg: '#E8F5E9', fg: '#1B5E20' },
-  { bg: '#FCE4EC', fg: '#880E4F' },
-]
-
 function tagFor(venue?: string | null): { label: string; bg: string; fg: string } {
-  if (venue && venue.trim()) {
-    let hash = 0
-    for (let i = 0; i < venue.length; i++) hash = (hash * 31 + venue.charCodeAt(i)) >>> 0
-    const c = PALETTE[hash % PALETTE.length]
-    return { label: venue, bg: c.bg, fg: c.fg }
-  }
-  return { label: '论文', bg: '#EEEEE6', fg: '#555555' }
+  // 只展示固定中文大类标签；英文会议名保留在 venue 字段，不当作标签。
+  return { label: chineseCategoryForVenue(venue), ...categoryColorForVenue(venue) }
+}
+
+function formatGeneratedAt(value: string | null | undefined): string {
+  if (!value) return '尚未生成'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '尚未生成'
+  return date.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 function loadFavorites() {
@@ -72,12 +73,22 @@ async function load() {
 }
 
 async function onRefresh() {
+  if (refreshing.value) return
   refreshing.value = true
+  refreshError.value = null
+  refreshMessage.value = '正在执行论文推荐任务（基于本地知识库检索顶会论文）…'
   try {
     const data = await refreshPaperRecommendations()
     payload.value = data
+    if (data.status === 'failed') {
+      refreshError.value = data.error || '论文推荐任务执行失败'
+      refreshMessage.value = `论文推荐任务执行失败：${refreshError.value}`
+    } else {
+      refreshMessage.value = `论文推荐任务已执行：${data.items.length} 篇${data.topVenueOnly ? '顶会' : '数据方向'}推荐（${formatGeneratedAt(data.generatedAt)}）`
+    }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '刷新失败'
+    refreshError.value = e instanceof Error ? e.message : '刷新失败'
+    refreshMessage.value = `论文推荐任务执行失败：${refreshError.value}`
   } finally {
     refreshing.value = false
   }
@@ -257,12 +268,15 @@ onMounted(() => {
       <div class="ph-section-header">
         <h2 class="ph-section-title">热门论文推荐</h2>
         <div class="ph-section-actions">
+          <span v-if="payload?.generatedAt" class="ph-refresh-hint">上次更新 {{ formatGeneratedAt(payload.generatedAt) }}</span>
           <button class="ph-refresh" :disabled="refreshing" @click="onRefresh">
-            {{ refreshing ? '生成中…' : '刷新' }}
+            {{ refreshing ? '执行任务中…' : '刷新' }}
           </button>
           <RouterLink class="ph-section-link" :to="{ name: 'hermes.personalWorkbench' }">查看全部 →</RouterLink>
         </div>
       </div>
+
+      <p v-if="refreshMessage" class="ph-refresh-message" :class="{ 'is-error': refreshError }">{{ refreshMessage }}</p>
 
       <div v-if="loading" class="ph-state">加载中…</div>
       <div v-else-if="error" class="ph-state ph-state-error">{{ error }}</div>
@@ -574,6 +588,20 @@ onMounted(() => {
   cursor: pointer;
   &:hover { border-color: var(--ph-navy); color: var(--ph-navy); }
   &:disabled { opacity: 0.6; cursor: default; }
+}
+.ph-refresh-hint {
+  font-family: var(--ph-font-sans);
+  font-size: 12px;
+  color: var(--ph-text-medium);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.ph-refresh-message {
+  margin: 0;
+  font-family: var(--ph-font-sans);
+  font-size: 13px;
+  color: #1B5E20;
+  &.is-error { color: #b91c1c; }
 }
 .ph-section-link {
   font-family: var(--ph-font-sans);

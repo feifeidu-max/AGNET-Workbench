@@ -3,10 +3,36 @@ import { getApiKey, request } from './client'
 export type ServiceStatus = 'ok' | 'degraded' | 'down' | 'unavailable' | 'unknown'
 
 export interface ServiceHealth {
+  id?: string
   name: string
   status: ServiceStatus
   detail?: string
   checkedAt?: string | null
+}
+
+export interface ModelProbe {
+  status: 'ok' | 'failed' | 'skipped' | 'unknown'
+  error: string | null
+  checkedAt: string | null
+}
+
+export interface ModelHealth {
+  profile: string
+  provider: string | null
+  providerName: string | null
+  model: string | null
+  baseUrl: string | null
+  keyEnv: string | null
+  keyConfigured: boolean
+  keyMasked: string | null
+  apiMode: string | null
+  probe: ModelProbe
+}
+
+export interface HermesGatewayHealth {
+  running: boolean
+  pid: number | null
+  profile: string
 }
 
 export interface WorkbenchSummary {
@@ -14,11 +40,15 @@ export interface WorkbenchSummary {
     drafts: number
     awaitingReview?: number
     trusted: number
+    /** 已批准发布的公众号文章/技术文章数量（wiki/sources） */
+    sources?: number
     candidates: number
     serviceOk: boolean
     todayPapers?: number
   }
   paperRecommendations?: PaperRecommendationsPayload
+  hermes?: HermesGatewayHealth
+  model?: ModelHealth
   services: ServiceHealth[]
 }
 
@@ -88,6 +118,8 @@ export interface KnowledgeDraft {
   additions?: number
   modifications?: number
   changeCount?: number
+  /** 已发布（trusted）时对应的 Wiki 页面路径，如 wiki/papers/xxx.md */
+  publishedPages?: string[]
 }
 
 export interface KnowledgeDraftChange {
@@ -164,6 +196,12 @@ export interface PaperRecommendation {
   reason?: string | null
   venue?: string | null
   doi?: string | null
+  /** 中文标签：LLM-Wiki 同款关键词提取，固定数据方向域标签 */
+  tags?: string[]
+  /** 本次刷新新检索到的论文（服务端对比上一轮结果标记） */
+  newlyFound?: boolean
+  /** 该论文被搜出来的时间（ISO），旧论文保留首次搜出时间 */
+  foundAt?: string | null
 }
 
 export interface PaperRecommendationsPayload {
@@ -255,6 +293,7 @@ function normalizeDraft(value: unknown): KnowledgeDraft {
     additions: asNumber(item.additions ?? item.addedPages, 0),
     modifications: asNumber(item.modifications ?? item.modifiedPages, 0),
     changeCount: asNumber(item.changeCount ?? item.proposedChangeCount ?? item.proposed_change_count, 0),
+    publishedPages: asStringArray(item.publishedPages ?? item.published_pages),
   }
 }
 
@@ -339,6 +378,28 @@ export async function refreshPaperRecommendations(): Promise<PaperRecommendation
   return request<PaperRecommendationsPayload>('/api/workbench/paper-recommendations/refresh', {
     method: 'POST',
   })
+}
+
+/**
+ * 手动触发“论文推荐（本地知识库 · 顶会优先）”任务并等待结果：
+ * POST 触发（后台跑 Hermes agent 任务 + 本地引擎兜底，立即返回 pending），
+ * 然后轮询 GET 直到状态离开 pending，按钮始终能等到新结果。
+ */
+export async function refreshPaperRecommendationsAndWait(
+  timeoutMs = 180_000,
+  pollMs = 3000,
+): Promise<PaperRecommendationsPayload> {
+  await request<PaperRecommendationsPayload>('/api/workbench/paper-recommendations/refresh', {
+    method: 'POST',
+  })
+  const deadline = Date.now() + timeoutMs
+  let last: PaperRecommendationsPayload | null = null
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, pollMs))
+    last = await fetchPaperRecommendations()
+    if (last.status !== 'pending') return last
+  }
+  return last ?? (await fetchPaperRecommendations())
 }
 
 export async function fetchWechatSources(): Promise<WechatSource[]> {

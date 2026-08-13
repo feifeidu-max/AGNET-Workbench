@@ -13,10 +13,18 @@
  *   last_run_at / last_status / run_count / last_error，使 Jobs 卡片显示真实运行历史。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { spawn } from 'child_process'
 import { join } from 'path'
 import { getActiveProfileName, getProfileDir, listProfileNamesFromDisk } from './hermes/hermes-profile'
+import { getHermesBin } from './hermes/hermes-path'
+import { logger } from './logger'
 
 export const PAPER_RECOMMENDER_JOB_ID = 'paper-recommender-kb'
+const PAPER_RECOMMENDER_JOB_NAME = '论文推荐（本地知识库 · 顶会优先 · 最新优先）'
+const LEGACY_JOB_NAMES = new Set([
+  '数据工程论文推荐（本地知识库 · 最新优先）',
+  '数据工程论文推荐（本地知识库 · 顶会优先 · 最新优先）',
+])
 const SCHEDULE = '0 */6 * * *' // 每 6 小时
 const STUDIO_PORT = 8648
 
@@ -69,6 +77,11 @@ function cronSchedule(value: unknown): Record<string, string> {
 /** Convert the pre-0.18 Studio job shape into Hermes' persisted cron schema. */
 function normalizeManagedJob(job: any): any {
   const id = String(job?.id || job?.job_id || PAPER_RECOMMENDER_JOB_ID)
+  // Migrate the old default display name so the Jobs page and the
+  // recommendation refresh button refer to the same task name.
+  const name = typeof job?.name === 'string' && LEGACY_JOB_NAMES.has(job.name)
+    ? PAPER_RECOMMENDER_JOB_NAME
+    : (job?.name ?? PAPER_RECOMMENDER_JOB_NAME)
   const schedule = cronSchedule(job?.schedule)
   const repeat = job?.repeat && typeof job.repeat === 'object'
     ? { times: job.repeat.times ?? null, completed: Number(job.repeat.completed) || 0 }
@@ -77,6 +90,7 @@ function normalizeManagedJob(job: any): any {
     ...job,
     id,
     job_id: id,
+    name,
     // This is a Studio-managed task. Always migrate old script-only jobs to
     // the current agent prompt so a stale script cannot silently run instead.
     prompt: JOB_PROMPT,
@@ -126,7 +140,7 @@ function makeJob(): Record<string, unknown> {
   return {
     id: PAPER_RECOMMENDER_JOB_ID,
     job_id: PAPER_RECOMMENDER_JOB_ID,
-    name: '数据工程论文推荐（本地知识库 · 最新优先）',
+    name: PAPER_RECOMMENDER_JOB_NAME,
     prompt: JOB_PROMPT,
     skills: [],
     skill: null,
@@ -179,6 +193,33 @@ export function ensurePaperRecommenderJob(): void {
   const profiles = new Set<string>([getActiveProfileName(), 'default'])
   for (const p of profiles) {
     try { seedJobForProfile(p) } catch { /* ignore */ }
+  }
+}
+
+/**
+ * 手动触发“论文推荐（本地知识库 · 顶会优先）”Hermes cron 任务（agent 模式）。
+ * hermes cron run 会把任务的 next_run_at 置为当前时间，由正在运行的 gateway
+ * 的 cron ticker 在下一个 tick（通常 ≤60s）真正执行 agent 联网检索，
+ * 完成后由 agent 通过 HTTP POST 回写到 /api/workbench/paper-recommendations。
+ * 本函数不阻塞等待；返回 spawn 是否成功。
+ */
+export function runPaperRecommenderAgentJob(profile: string): { started: boolean; pid?: number; error?: string } {
+  const profileName = profile || getActiveProfileName() || 'default'
+  const profileDir = getProfileDir(profileName)
+  try {
+    const child = spawn(getHermesBin(), ['cron', 'run', '--profile', profileName, PAPER_RECOMMENDER_JOB_ID], {
+      env: { ...process.env, HERMES_HOME: profileDir },
+      stdio: 'ignore',
+      windowsHide: true,
+      detached: false,
+    })
+    child.on('error', (err) => {
+      logger.warn(err, '[paper-recommender-job] hermes cron run spawn failed profile=%s', profileName)
+    })
+    child.unref()
+    return { started: true, pid: child.pid }
+  } catch (err) {
+    return { started: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
 

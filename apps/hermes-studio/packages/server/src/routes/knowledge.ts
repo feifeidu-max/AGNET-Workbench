@@ -1,6 +1,8 @@
 import Router from '@koa/router'
 import type { Context } from 'koa'
 import { Readable } from 'node:stream'
+import { join, resolve, sep } from 'path'
+import { rm } from 'fs/promises'
 import {
   LlmWikiApiError,
   knowledgeSummary,
@@ -209,6 +211,76 @@ for (const action of ['approve', 'revise', 'reject'] as const) {
     }
   })
 }
+
+/**
+ * 一键删除已入库的论文/文章：
+ * 1) 通过 LLM-Wiki 文件删除接口移除其发布的 Wiki 页面（删除前自动留文件历史快照，可恢复）；
+ * 2) 清理暂存目录中的草稿记录，使该草稿从审核队列移除。
+ */
+knowledgeRoutes.post('/api/knowledge/drafts/:id/remove', async (ctx: Context) => {
+  const draftId = String(ctx.params.id || '').trim()
+  if (!/^[0-9a-fA-F-]{8,64}$/.test(draftId)) {
+    ctx.status = 400
+    ctx.body = { error: 'invalid_draft_id' }
+    return
+  }
+  try {
+    const projects = await llmWikiJson<Record<string, unknown>>('/projects')
+    const current = (projects.currentProject ?? (Array.isArray(projects.projects) ? projects.projects[0] : null)) as Record<string, unknown> | null
+    const projectPath = typeof current?.path === 'string' ? current.path : ''
+    if (!projectPath) {
+      ctx.status = 409
+      ctx.body = { error: '未找到当前知识库项目' }
+      return
+    }
+
+    // 从草稿列表读取 publishedPages（不依赖 proposal.json，列表即含该字段）
+    const list = await llmWikiJson<Record<string, unknown>>('/projects/current/ingest-drafts')
+    const drafts = Array.isArray(list.drafts) ? (list.drafts as Record<string, unknown>[]) : []
+    const draft = drafts.find((d) => String(d?.id ?? '') === draftId) as Record<string, unknown> | undefined
+    if (!draft) {
+      ctx.status = 404
+      ctx.body = { error: 'draft_not_found' }
+      return
+    }
+    const publishedPages = Array.isArray(draft.publishedPages)
+      ? draft.publishedPages.filter((p): p is string => typeof p === 'string' && p.startsWith('wiki/') && p.endsWith('.md'))
+      : []
+
+    // 1) 删除已发布的 Wiki 页面
+    const removedPages: string[] = []
+    const failedPages: string[] = []
+    for (const page of publishedPages) {
+      try {
+        await llmWikiJson('/projects/current/files/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: page }),
+        })
+        removedPages.push(page)
+      } catch {
+        failedPages.push(page)
+      }
+    }
+
+    // 2) 清理暂存目录中的草稿记录（staging/<draftId>），使草稿从审核队列移除
+    let stagingRemoved = false
+    try {
+      const stagingRoot = resolve(join(projectPath, '.llm-wiki', 'staging'))
+      const target = resolve(join(stagingRoot, draftId))
+      if (target.startsWith(stagingRoot + sep)) {
+        await rm(target, { recursive: true, force: true })
+        stagingRemoved = true
+      }
+    } catch {
+      // 暂存清理失败不阻塞主流程
+    }
+
+    ctx.body = { ok: true, draftId, removedPages, failedPages, stagingRemoved }
+  } catch (error) {
+    setProxyError(ctx, error)
+  }
+})
 
 knowledgeRoutes.get('/api/knowledge/search', async (ctx: Context) => {
   const query = String(ctx.query.q || '').trim()

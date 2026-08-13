@@ -39,6 +39,7 @@ import {
   createManagedKnowledgeProject,
   createMissingKnowledgePage,
   deleteKnowledgeFile,
+  removeKnowledgeDraft,
   fetchKnowledgeChatSession,
   fetchKnowledgeFile,
   fetchKnowledgeLint,
@@ -172,6 +173,7 @@ const draftDetailOpen = ref(false)
 const draftDetail = ref<KnowledgeDraftDetail | null>(null)
 const draftDetailLoading = ref(false)
 const actingDraftId = ref('')
+const deletingDraftId = ref('')
 const reviseDraft = ref<KnowledgeDraft | null>(null)
 const revisionGuidance = ref('')
 const reviews = ref<KnowledgeReview[]>([])
@@ -216,8 +218,10 @@ const awaitingDrafts = computed(() => drafts.value.filter(draft => draft.status 
 const dirtyFile = computed(() => activeFileContent.value !== savedFileContent.value)
 const wikiTree = computed(() => toTreeNodes(wikiFiles.value))
 const sourceTree = computed(() => toTreeNodes(sourceFiles.value))
+// 关键词相似边（keyword_graph 模式下文章/论文间的主要连线）也纳入图谱展示
 function isExplicitGraphEdge(edge: Record<string, unknown>): boolean {
-  return String(edge.kind ?? '').toLowerCase() !== 'keyword_similarity'
+  const kind = String(edge.kind ?? '').toLowerCase()
+  return kind === 'wikilink' || kind === 'keyword_similarity'
 }
 const filteredGraphNodes = computed(() => {
   const eligible = graphPaperOnly.value
@@ -598,6 +602,20 @@ async function approveDraft(draft: KnowledgeDraft) {
     message.error(error instanceof Error ? error.message : '批准失败')
   } finally {
     actingDraftId.value = ''
+  }
+}
+
+/** 一键删除已入库的论文/文章：移除 Wiki 页面 + 清理草稿记录（页面可从 Wiki 文件历史恢复）。 */
+async function removeTrustedDraft(draft: KnowledgeDraft) {
+  deletingDraftId.value = draft.id
+  try {
+    const result = await removeKnowledgeDraft(draft.id)
+    message.success(`已删除「${draft.title}」${result.removedPages.length ? `（移除 ${result.removedPages.length} 个 Wiki 页面）` : ''}`)
+    await loadDrafts()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除失败')
+  } finally {
+    deletingDraftId.value = ''
   }
 }
 
@@ -1032,7 +1050,7 @@ onMounted(async () => {
         <section v-else-if="activeView === 'graph'" class="knowledge-view">
           <div class="section-heading"><div><h3>知识图谱</h3><p>仅显示 Wiki 页面中的显式链接，关系词来自文献处理阶段生成的页面关系；草稿不参与图谱。</p></div><NButton size="small" :loading="graphLoading" @click="loadGraph">刷新图谱</NButton></div>
           <NAlert v-if="graphError" type="error" class="knowledge-studio__alert">{{ graphError }}</NAlert>
-          <div class="graph-toolbar"><NInput v-model:value="graphFilter" placeholder="输入论文标题，保留匹配节点及其一跳邻居" /><NCheckbox v-model:checked="graphPaperOnly">仅看论文</NCheckbox><NTag :bordered="false">{{ filteredGraphNodes.length }} 节点 · {{ filteredGraphEdges.length }} 条 Wiki 显式链接</NTag></div>
+          <div class="graph-toolbar"><NInput v-model:value="graphFilter" placeholder="输入论文标题，保留匹配节点及其一跳邻居" /><NCheckbox v-model:checked="graphPaperOnly">仅看论文</NCheckbox><NTag :bordered="false">{{ filteredGraphNodes.length }} 节点 · {{ filteredGraphEdges.length }} 条图谱链接（含关键词相似）</NTag></div>
           <NSpin :show="graphLoading"><KnowledgeGraphNetwork v-if="filteredGraphNodes.length" :nodes="filteredGraphNodes" :edges="filteredGraphEdges" @open="openGraphNode" /><NEmpty v-else description="暂无知识图谱节点" /></NSpin>
         </section>
 
@@ -1040,7 +1058,7 @@ onMounted(async () => {
           <div class="section-heading"><div><h3>知识归纳与审核</h3><p>论文和优质技术文章都先在此处审核；审核前不可检索、不可引用。</p></div><NButton size="small" :loading="draftsLoading" @click="loadDrafts">刷新</NButton></div>
           <section class="upload-strip"><div><strong>导入论文或技术文章 PDF</strong><span>{{ uploadProgress || '公众号文章可在浏览器中打印为 PDF 后导入；所有材料都会先进入暂存和审核队列。' }}</span></div><input ref="fileInput" class="visually-hidden" type="file" accept="application/pdf,.pdf" multiple @change="uploadPdfs" /><NButton type="primary" :loading="uploading" @click="openFilePicker">选择 PDF</NButton></section>
           <div class="subsection-heading"><h4>严格草稿队列</h4><span>{{ drafts.length }} 项</span></div>
-          <NSpin :show="draftsLoading"><div v-if="drafts.length" class="draft-list"><article v-for="draft in drafts" :key="draft.id" class="draft-row"><div><strong>{{ draft.title }}</strong><span>{{ draft.fileName }} · {{ formatTime(draft.updatedAt || draft.createdAt) }}</span><p v-if="draft.summary">{{ draft.summary }}</p><small v-if="draft.error" class="error-copy">{{ draft.error }}</small></div><div class="draft-actions"><NTag :type="draftStatusType(draft.status)" :bordered="false">{{ draftStatusLabel(draft.status) }}</NTag><NButton size="tiny" @click="openDraft(draft)">查看</NButton><NButton v-if="draft.status === 'awaiting_review'" size="tiny" type="primary" :loading="actingDraftId === draft.id" @click="approveDraft(draft)">批准</NButton><NButton v-if="draft.status === 'awaiting_review'" size="tiny" @click="reviseDraft = draft; revisionGuidance = ''">退回</NButton><NPopconfirm v-if="draft.status === 'awaiting_review'" @positive-click="rejectDraft(draft)"><template #trigger><NButton size="tiny" type="error" secondary>拒绝</NButton></template>确认拒绝这份草稿？</NPopconfirm></div></article></div><NEmpty v-else description="暂无论文或研究草稿" /></NSpin>
+          <NSpin :show="draftsLoading"><div v-if="drafts.length" class="draft-list"><article v-for="draft in drafts" :key="draft.id" class="draft-row"><div><strong>{{ draft.title }}</strong><span>{{ draft.fileName }} · {{ formatTime(draft.updatedAt || draft.createdAt) }}</span><p v-if="draft.summary">{{ draft.summary }}</p><small v-if="draft.error" class="error-copy">{{ draft.error }}</small></div><div class="draft-actions"><NTag :type="draftStatusType(draft.status)" :bordered="false">{{ draftStatusLabel(draft.status) }}</NTag><NButton size="tiny" @click="openDraft(draft)">查看</NButton><NPopconfirm v-if="draft.status === 'trusted' && (draft.publishedPages?.length ?? 0) > 0" @positive-click="removeTrustedDraft(draft)"><template #trigger><NButton size="tiny" type="error" secondary :loading="deletingDraftId === draft.id">删除</NButton></template>确认删除「{{ draft.title }}」？将移除其已发布的 Wiki 页面并清除草稿记录；页面内容可从 Wiki 文件历史恢复。</NPopconfirm><NButton v-if="draft.status === 'awaiting_review'" size="tiny" type="primary" :loading="actingDraftId === draft.id" @click="approveDraft(draft)">批准</NButton><NButton v-if="draft.status === 'awaiting_review'" size="tiny" @click="reviseDraft = draft; revisionGuidance = ''">退回</NButton><NPopconfirm v-if="draft.status === 'awaiting_review'" @positive-click="rejectDraft(draft)"><template #trigger><NButton size="tiny" type="error" secondary>拒绝</NButton></template>确认拒绝这份草稿？</NPopconfirm></div></article></div><NEmpty v-else description="暂无论文或研究草稿" /></NSpin>
           <div class="subsection-heading"><h4>普通审核事项</h4><NButton size="tiny" text :disabled="!reviews.length" @click="resolveAllReviews">全部处理</NButton></div>
           <NSpin :show="reviewsLoading"><div v-if="reviews.length" class="review-list"><article v-for="review in reviews" :key="review.id" class="review-row"><div><strong>{{ review.title }}</strong><span>{{ review.type }}</span><p v-if="review.description">{{ review.description }}</p></div><NButton size="tiny" :loading="resolvingReviewId === review.id" @click="resolveReview(review)">处理</NButton></article></div><NEmpty v-else description="没有待处理的普通审核事项" /></NSpin>
         </section>

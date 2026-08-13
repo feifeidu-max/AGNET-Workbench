@@ -174,6 +174,22 @@ function countWikiPages(nodes: unknown): number {
   return count
 }
 
+/** 已批准发布的公众号文章/技术文章数量（wiki/sources/*.md，不含系统页）。 */
+function countSourcePages(nodes: unknown): number {
+  if (!Array.isArray(nodes)) return 0
+  let count = 0
+  for (const item of nodes) {
+    if (!item || typeof item !== 'object') continue
+    const node = item as Record<string, unknown>
+    if (node.isDir === true) count += countSourcePages(node.children)
+    else if (typeof node.path === 'string') {
+      const path = node.path.replace(/\\/g, '/').toLowerCase()
+      if (path.endsWith('.md') && (path.includes('/wiki/sources/') || path.includes('/sources/'))) count += 1
+    }
+  }
+  return count
+}
+
 function listCount(payload: unknown, keys: string[]): number {
   if (!payload || typeof payload !== 'object') return 0
   const value = payload as Record<string, unknown>
@@ -231,6 +247,7 @@ export async function knowledgeSummary() {
         ? { id: currentProject.id, name: currentProject.name, current: currentProject.current === true }
         : null,
       trusted: countWikiPages(files),
+      sources: countSourcePages(files),
       todayPapers: countTodayDrafts(drafts),
       drafts: listCount(draftsPayload, ['drafts']),
       awaitingReview: drafts.filter((draft: any) => draft.status === 'awaiting_review').length,

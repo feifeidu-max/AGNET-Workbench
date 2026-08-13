@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$ConfigPath = "",
     [switch]$NoBrowser,
@@ -232,7 +232,72 @@ try {
         Assert-VersionText -ActualText ([string]$studioHealth.version) -Expected ([string]$versions.hermesAgent.version) -Name "Studio Hermes Agent"
     }
 
+    # ── Hermes Agent 后端就绪检查 ──────────────────────────────────────────
+    # Studio 的 Hermes 对话/定时任务依赖它托管的 hermes agent 网关与会话桥接。
+    # 启动器必须等到 agent_bridge 真正 ready，否则前端“对话”按钮只是摆设。
+    Write-Host "  Waiting for the Hermes Agent gateway and session bridge..."
+    $agentDeadline = (Get-Date).AddSeconds(180)
+    $agentProbe = $null
+    while ((Get-Date) -lt $agentDeadline) {
+        try {
+            $agentProbe = Invoke-RestMethod -Uri $studioHealthUri -Method Get -TimeoutSec 5 -UseBasicParsing
+            $bridgeProbe = if ($null -ne $agentProbe) { $agentProbe.agent_bridge } else { $null }
+            $bridgeStatus = if ($null -ne $bridgeProbe) { [string]$bridgeProbe.status } else { "" }
+            if ([string]$agentProbe.gateway -eq "running" -and $bridgeStatus -eq "ready") {
+                break
+            }
+        } catch { }
+        Start-Sleep -Seconds 2
+    }
+    $bridge = if ($null -ne $agentProbe) { $agentProbe.agent_bridge } else { $null }
+    $bridgeStatus = if ($null -ne $bridge) { [string]$bridge.status } else { "" }
+    $bridgePid = if ($null -ne $bridge) { [string]$bridge.pid } else { "" }
+    if ($null -eq $agentProbe -or [string]$agentProbe.gateway -ne "running" -or $bridgeStatus -ne "ready") {
+        $detail = if ($null -ne $agentProbe) {
+            "gateway=$($agentProbe.gateway) bridge=$bridgeStatus pid=$bridgePid"
+        } else {
+            "studio health unreachable"
+        }
+        throw "Hermes Agent 后端未就绪（180 秒超时，$detail）。请检查 Hermes 虚拟环境 $hermes 及日志 $hermesHome\logs，然后重新启动。"
+    }
+    $agentPid = $bridgePid
+
+    # ── Hermes 对话模型配置检查（base_url + api key）──────────────────────
+    $hermesModel = Get-AGNETHermesModelConfig -HermesHome $hermesHome
+    if ([string]::IsNullOrWhiteSpace([string]$hermesModel.Provider) -or [string]::IsNullOrWhiteSpace([string]$hermesModel.BaseUrl)) {
+        throw "Hermes 对话模型未配置。请先在 Studio 的「模型与设置」配置 provider（base_url），或编辑 $($hermesModel.ConfigPath) 添加 custom_providers 后再启动；否则 Hermes 对话按钮无法使用。"
+    }
+    $modelKeyConfigured = $false
+    if (-not [string]::IsNullOrWhiteSpace([string]$hermesModel.KeyEnv)) {
+        $modelKeyConfigured = Test-AGNETEnvVariableSet -Name ([string]$hermesModel.KeyEnv)
+    }
+    if (-not $modelKeyConfigured) {
+        throw "Hermes 对话模型的 API Key 未配置：用户环境变量 '$($hermesModel.KeyEnv)' 未设置。请先设置该环境变量（模型 key 只放环境变量，不写入仓库），然后重新启动；否则 Hermes 对话按钮无法使用。"
+    }
+
+    # ── LLM Wiki 问答模型检查（可选，仅影响 Wiki 对话/深度研究）─────────────
+    $wikiLlmConfigured = (Test-AGNETEnvVariableSet -Name "LLM_WIKI_LLM_PROVIDER") -and
+        (Test-AGNETEnvVariableSet -Name "LLM_WIKI_LLM_CUSTOM_ENDPOINT") -and
+        (Test-AGNETEnvVariableSet -Name "LLM_WIKI_LLM_API_KEY")
+    $wikiLlmWarning = ""
+    if (-not $wikiLlmConfigured) {
+        $wikiLlmWarning = "未配置 LLM_WIKI_LLM_PROVIDER/CUSTOM_ENDPOINT/API_KEY，Wiki 问答不可用（论文审核、检索、图谱、推荐不受影响）。"
+    }
+
     $url = "http://127.0.0.1:$studioPort"
+    Write-Host ""
+    Write-Host "========== AGNET 启动检查清单 =========="
+    Write-Host "  [OK] Hermes Studio     $url (v$($studioHealth.webui_version))"
+    Write-Host "  [OK] Hermes Agent      网关+会话桥接就绪 (pid $agentPid, v$($studioHealth.version))"
+    Write-Host "  [OK] 对话模型           provider=$($hermesModel.Provider) model=$($hermesModel.Model) key=$($hermesModel.KeyEnv)"
+    Write-Host "  [OK] LLM Wiki           127.0.0.1:$wikiPort (retrievalMode=$($wikiHealth.retrievalMode), 当前项目已注册备份)"
+    Write-Host "  [OK] LLM Wiki Token     $tokenVariable 已配置"
+    if ($wikiLlmConfigured) {
+        Write-Host "  [OK] Wiki 问答模型       LLM_WIKI_LLM_* 已配置"
+    } else {
+        Write-Host "  [!!] Wiki 问答模型       $wikiLlmWarning"
+    }
+    Write-Host "=========================================="
     Write-Host "AGNET is ready: $url"
     if (-not $NoBrowser) {
         Start-Process $url | Out-Null

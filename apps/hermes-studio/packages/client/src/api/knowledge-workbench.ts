@@ -221,6 +221,17 @@ export async function deleteKnowledgeFile(path: string, ifMatch?: string): Promi
   })
 }
 
+/** 一键删除已入库的论文/文章：移除其发布的 Wiki 页面 + 清理审核队列中的草稿记录。 */
+export async function removeKnowledgeDraft(id: string): Promise<{ removedPages: string[]; failedPages: string[] }> {
+  const result = record(await request<unknown>(`/api/knowledge/drafts/${encodeURIComponent(id)}/remove`, {
+    method: 'POST',
+  }))
+  return {
+    removedPages: array(result, 'removedPages').map((p) => string(p)),
+    failedPages: array(result, 'failedPages').map((p) => string(p)),
+  }
+}
+
 export async function createMissingKnowledgePage(title: string, content?: string): Promise<KnowledgeFileContent> {
   const result = record(await request<unknown>('/api/knowledge/files/create-missing', {
     method: 'POST',

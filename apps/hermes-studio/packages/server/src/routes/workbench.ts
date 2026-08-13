@@ -1,7 +1,8 @@
 import Router from '@koa/router'
 import type { Context } from 'koa'
 import { knowledgeSummary } from '../services/knowledge/llm-wiki-client'
-import { loadRecommendations, refreshRecommendations, saveAgentRecommendations } from '../services/paper-recommender'
+import { loadRecommendations, saveAgentRecommendations, triggerPaperRecommendationRefresh } from '../services/paper-recommender'
+import { getHermesGatewayHealth, getModelHealth } from '../services/model-health'
 import {
   addWechatSource,
   importDiscoveredWechatArticles,
@@ -15,13 +16,49 @@ export const workbenchRoutes = new Router()
 
 workbenchRoutes.get('/api/workbench/summary', async (ctx: Context) => {
   const knowledge = await knowledgeSummary()
+  const hermes = getHermesGatewayHealth()
+  const model = await getModelHealth()
+  const modelStatus = !model.keyConfigured
+    ? 'down'
+    : model.probe.status === 'ok'
+      ? 'ok'
+      : model.probe.status === 'failed'
+        ? 'degraded'
+        : 'unknown'
+  const modelDetailParts = [
+    model.baseUrl ? `base_url=${model.baseUrl}` : 'base_url 未配置',
+    model.model ? `模型 ${model.model}` : '模型未配置',
+    model.keyMasked
+      ? `API Key ${model.keyMasked}`
+      : model.keyEnv
+        ? `API Key 缺失（环境变量 ${model.keyEnv} 未设置）`
+        : 'API Key 未配置',
+  ]
+  if (model.probe.status === 'ok') modelDetailParts.push('连通性测试通过')
+  else if (model.probe.error) modelDetailParts.push(model.probe.error)
   ctx.body = {
     generatedAt: new Date().toISOString(),
     knowledge,
     paperRecommendations: loadRecommendations(),
+    hermes,
+    model,
     services: [
       { id: 'studio', name: 'Hermes Studio', status: 'ok' },
+      {
+        id: 'hermes-agent',
+        name: 'Hermes Agent',
+        status: hermes.running ? 'ok' : 'down',
+        detail: hermes.running
+          ? `gateway 运行中 · profile ${hermes.profile}（PID ${hermes.pid}）`
+          : 'gateway 未运行，对话与定时任务不可用',
+      },
       { id: 'llm-wiki', name: 'LLM Wiki', status: knowledge.serviceOk ? 'ok' : 'unavailable' },
+      {
+        id: 'model-provider',
+        name: model.providerName ? `模型服务 · ${model.providerName}` : '模型服务',
+        status: modelStatus,
+        detail: modelDetailParts.join(' · '),
+      },
     ],
     dataBoundaries: {
       knowledge: 'public-papers-may-use-external-llm',
@@ -34,7 +71,9 @@ workbenchRoutes.get('/api/workbench/paper-recommendations', async (ctx: Context)
 })
 
 workbenchRoutes.post('/api/workbench/paper-recommendations/refresh', async (ctx: Context) => {
-  ctx.body = await refreshRecommendations()
+  // 手动执行“论文推荐（本地知识库 · 顶会优先）”任务：
+  // 后台触发 Hermes cron（agent 模式）+ 本地引擎兜底，立即返回 pending，前端轮询。
+  ctx.body = await triggerPaperRecommendationRefresh()
 })
 
 // 由 Hermes cron 任务（agent 模式）回写：基于知识库 wiki 联网检索后提交顶会论文列表。

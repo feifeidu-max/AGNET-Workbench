@@ -7,20 +7,20 @@ const route = useRoute()
 const router = useRouter()
 
 const navItems = [
-  { label: '首页', name: 'hermes.paperhub' },
-  { label: '工作台', name: 'hermes.workbench' },
+  // 首页：论文知识库/推荐首页（hermes.workbench → DataLibraryView），保持不变
+  { label: '首页', name: 'hermes.workbench' },
+  // 工作台：原来的老工作台（个人工作台，greeting + 功能卡片 + 论文推荐 + 本地服务）
+  { label: '工作台', name: 'hermes.personalWorkbench' },
+  // LLM-Wiki：导入论文 PDF、审核批准入库（默认落在“审核”页）
+  { label: 'LLM-Wiki', name: 'hermes.knowledge', query: { tab: 'review' } },
   { label: '任务', name: 'hermes.jobs' },
   { label: '对话', name: 'hermes.chat' },
   { label: '历史', name: 'hermes.history' },
-  { label: '设置', name: 'hermes.settings' },
 ]
 
 const currentName = computed(() => route.name as string)
-const activeName = computed(() => {
-  // personal-workbench 与 workbench 都归到“工作台”高亮
-  if (currentName.value === 'hermes.personalWorkbench') return 'hermes.workbench'
-  return currentName.value
-})
+// 首页/工作台已是两个独立路由，直接按当前路由名高亮即可。
+const activeName = computed(() => currentName.value)
 
 const mobileOpen = ref(false)
 function toggleMobile() {
@@ -35,10 +35,10 @@ function runSearch() {
   const q = searchQuery.value.trim()
   closeMobile()
   if (!q) {
-    router.push({ name: 'hermes.paperhub' })
+    router.push({ name: 'hermes.workbench' })
     return
   }
-  router.push({ name: 'hermes.paperhub', query: { q } })
+  router.push({ name: 'hermes.workbench', query: { q } })
 }
 
 const username = computed(() => getStoredUsername())
@@ -52,14 +52,14 @@ function goSettings() {
 <template>
   <header class="ph-topnav">
     <div class="ph-nav-left">
-      <RouterLink class="ph-logo" :to="{ name: 'hermes.paperhub' }" @click="closeMobile">PaperHub</RouterLink>
+      <RouterLink class="ph-logo" :to="{ name: 'hermes.workbench' }" @click="closeMobile">PaperHub</RouterLink>
       <nav class="ph-nav-links" :class="{ open: mobileOpen }">
         <RouterLink
           v-for="item in navItems"
           :key="item.name"
           class="ph-nav-link"
           :class="{ active: activeName === item.name }"
-          :to="{ name: item.name }"
+          :to="{ name: item.name, query: item.query }"
           @click="closeMobile"
         >{{ item.label }}</RouterLink>
       </nav>

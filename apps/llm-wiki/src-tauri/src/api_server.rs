@@ -79,6 +79,10 @@ pub fn start_api_server(app: AppHandle) {
 
         API_STATUS.store(1, Ordering::Relaxed);
         eprintln!("[API Server] Listening on http://{addr}{API_PREFIX}");
+        // A headless restart can leave generated proposals staged as
+        // `uploaded`; kick the strict-ingest worker so the review queue does
+        // not depend on a later upload request.
+        crate::ingest_gate::resume_queued_drafts(clip_server::current_project_path());
 
         for request in server.incoming_requests() {
             let method = request.method().clone();
@@ -971,6 +975,7 @@ fn handle_select_current_project(app: &AppHandle, body: &str) -> ApiResponse {
     if let Err(error) = clip_server::set_current_project(&project.path) {
         return err(500, &error);
     }
+    crate::ingest_gate::resume_queued_drafts(project.path.clone());
     project.current = true;
     ok(json!({ "ok": true, "project": project }))
 }
@@ -2192,9 +2197,21 @@ fn push_file_node(
 
 fn relative_to_project(project_path: &str, path: &Path) -> String {
     let root = Path::new(project_path);
-    path.strip_prefix(root)
-        .map(|p| p.to_string_lossy().replace('\\', "/"))
-        .unwrap_or_else(|_| path.to_string_lossy().replace('\\', "/"))
+    if let Ok(relative) = path.strip_prefix(root) {
+        return relative.to_string_lossy().replace('\\', "/");
+    }
+
+    // Windows canonicalize() returns an extended path such as \\?\C:\...,
+    // while the configured project path is usually the regular C:\... form.
+    // Compare against the canonical root before falling back to an absolute
+    // path, otherwise the public file API leaks an unusable path to clients.
+    if let Ok(canonical_root) = root.canonicalize() {
+        if let Ok(relative) = path.strip_prefix(&canonical_root) {
+            return relative.to_string_lossy().replace('\\', "/");
+        }
+    }
+
+    path.to_string_lossy().replace('\\', "/")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3326,9 +3343,16 @@ fn llm_config_source(app: &AppHandle) -> &'static str {
 struct ApiGraphNode {
     id: String,
     label: String,
+    title_zh: String,
     node_type: String,
+    content_kind: String,
     path: String,
     link_count: usize,
+    tags: Vec<String>,
+    authors: Vec<String>,
+    year: Option<u32>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    summary: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3338,6 +3362,7 @@ struct ApiGraphEdge {
     target: String,
     weight: f64,
     kind: String,
+    relation: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     shared_terms: Vec<String>,
 }
@@ -3345,10 +3370,22 @@ struct ApiGraphEdge {
 #[derive(Debug, Clone)]
 struct GraphPage {
     title: String,
+    title_zh: String,
     node_type: String,
+    content_kind: String,
     path: String,
-    links: Vec<String>,
+    links: Vec<GraphLink>,
+    tags: Vec<String>,
+    authors: Vec<String>,
+    year: Option<u32>,
+    summary: String,
     terms: BTreeMap<String, f64>,
+}
+
+#[derive(Debug, Clone)]
+struct GraphLink {
+    target: String,
+    relation: String,
 }
 
 fn handle_graph(app: &AppHandle, project_id: &str, query: &str) -> ApiResponse {
@@ -3413,8 +3450,39 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
         let title =
             commands::search::extract_title(&content, entry.file_name().to_string_lossy().as_ref());
         let node_type = extract_type(&content);
-        let links = extract_wikilinks(&content);
-        let terms = if node_type == "paper" {
+        let content_kind =
+            extract_frontmatter_value(&content, "content_kind").unwrap_or_else(|| {
+                if node_type == "paper" {
+                    "paper".to_string()
+                } else if node_type == "source" {
+                    "technical_article".to_string()
+                } else {
+                    String::new()
+                }
+            });
+        let title_zh =
+            extract_frontmatter_value(&content, "title_zh").unwrap_or_else(|| title.clone());
+        let mut tags = extract_frontmatter_list(&content, "domain_tags");
+        // 白名单归一化：只保留固定中文体系（数据采集/存储/计算/传输/治理/质量/安全/智能）
+        // 内的标签。入库归纳时模型偶尔会生造体系外的标签（例如“评测方法”“研究基础”），
+        // 这里一律丢弃；过滤后为空则按 wiki 页面标题+正文关键词重新推断。
+        tags.retain(|tag| DATA_DOMAIN_TAGS.contains(&tag.as_str()));
+        let mut seen_tags = std::collections::BTreeSet::new();
+        tags.retain(|tag| seen_tags.insert(tag.clone()));
+        if tags.is_empty() {
+            tags = infer_data_domain_tags(&format!("{title} {content}"));
+        }
+        let authors = extract_frontmatter_list(&content, "authors");
+        let year =
+            extract_frontmatter_value(&content, "year").and_then(|value| value.parse::<u32>().ok());
+        let summary = extract_frontmatter_value(&content, "summary")
+            .unwrap_or_else(|| extract_summary(&content));
+        let links = extract_graph_links(&content);
+        let terms = if matches!(
+            content_kind.as_str(),
+            "paper" | "technical_article" | "article"
+        ) || node_type == "paper"
+        {
             graph_term_counts(&title, &content)
         } else {
             BTreeMap::new()
@@ -3423,9 +3491,15 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
             id,
             GraphPage {
                 title,
+                title_zh,
                 node_type,
+                content_kind,
                 path,
                 links,
+                tags,
+                authors,
+                year,
+                summary,
                 terms,
             },
         );
@@ -3436,7 +3510,7 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
     let mut edges = Vec::new();
     for (source, page) in &raw {
         for link in &page.links {
-            let Some(target) = resolve_link(link, &ids) else {
+            let Some(target) = resolve_link(&link.target, &ids) else {
                 continue;
             };
             if &target == source {
@@ -3452,6 +3526,11 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
                 *link_count.entry(target.clone()).or_default() += 1;
                 edges.push(ApiGraphEdge {
                     source: source.clone(),
+                    relation: if link.relation.is_empty() {
+                        inferred_graph_relation(page, raw.get(&target), &[])
+                    } else {
+                        link.relation.clone()
+                    },
                     target,
                     weight: 1.0,
                     kind: "wikilink".to_string(),
@@ -3470,8 +3549,14 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
             link_count: *link_count.get(&id).unwrap_or(&0),
             id,
             label: page.title,
+            title_zh: page.title_zh,
             node_type: page.node_type,
+            content_kind: page.content_kind,
             path: page.path,
+            tags: page.tags,
+            authors: page.authors,
+            year: page.year,
+            summary: page.summary,
         })
         .collect();
     Ok((nodes, edges))
@@ -3485,7 +3570,14 @@ fn add_keyword_similarity_edges(
 ) {
     let papers = pages
         .iter()
-        .filter(|(_, page)| page.node_type == "paper" && !page.terms.is_empty())
+        .filter(|(_, page)| {
+            (page.node_type == "paper"
+                || matches!(
+                    page.content_kind.as_str(),
+                    "paper" | "technical_article" | "article"
+                ))
+                && !page.terms.is_empty()
+        })
         .collect::<Vec<_>>();
     if papers.len() < 2 {
         return;
@@ -3578,6 +3670,7 @@ fn add_keyword_similarity_edges(
             target,
             weight: (score * 1000.0).round() / 1000.0,
             kind: "keyword_similarity".to_string(),
+            relation: inferred_graph_relation(papers[left].1, Some(papers[right].1), &shared_terms),
             shared_terms,
         });
     }
@@ -3658,22 +3751,290 @@ fn extract_type(content: &str) -> String {
     "other".to_string()
 }
 
-fn extract_wikilinks(content: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut rest = content;
-    while let Some(start) = rest.find("[[") {
-        rest = &rest[start + 2..];
-        let Some(end) = rest.find("]]") else {
-            break;
-        };
-        let inner = &rest[..end];
-        let target = inner.split('|').next().unwrap_or("").trim();
-        if !target.is_empty() {
-            out.push(target.to_string());
+fn frontmatter(content: &str) -> Option<&str> {
+    let rest = content
+        .strip_prefix("---\n")
+        .or_else(|| content.strip_prefix("---\r\n"))?;
+    let end = rest.find("\n---")?;
+    Some(&rest[..end])
+}
+
+fn extract_frontmatter_value(content: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}:");
+    frontmatter(content)?
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(&prefix))
+        .map(|value| value.trim().trim_matches(['\'', '"']).trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn extract_frontmatter_list(content: &str, key: &str) -> Vec<String> {
+    extract_frontmatter_value(content, key)
+        .map(|value| {
+            value
+                .trim_matches(['[', ']'])
+                .split(',')
+                .map(|item| item.trim().trim_matches(['\'', '"']).to_string())
+                .filter(|item| !item.is_empty())
+                .take(8)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn extract_summary(content: &str) -> String {
+    let body = content.splitn(3, "---").nth(2).unwrap_or(content);
+    body.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with('-'))
+        .next()
+        .unwrap_or("")
+        .chars()
+        .take(180)
+        .collect()
+}
+
+/// 固定中文领域标签体系（与入库归纳提示词一致；前端只展示这 8 类，不随论文增长）。
+const DATA_DOMAIN_TAGS: &[&str] = &[
+    "数据采集",
+    "数据存储",
+    "数据计算",
+    "数据传输",
+    "数据治理",
+    "数据质量",
+    "数据安全",
+    "数据智能",
+];
+
+/// 推断不出任何领域标签时的兜底中文标签。
+const DATA_DOMAIN_FALLBACK_TAG: &str = "数据技术";
+
+/// 英文关键词按整词匹配（避免 "ai" 误命中 "available"、"main" 等）。
+fn contains_english_word(lower: &str, word: &str) -> bool {
+    let lower_bytes = lower.as_bytes();
+    let needle_bytes = word.as_bytes();
+    if needle_bytes.is_empty() || needle_bytes.len() > lower_bytes.len() {
+        return false;
+    }
+    let mut pos = 0usize;
+    while pos + needle_bytes.len() <= lower_bytes.len() {
+        if &lower_bytes[pos..pos + needle_bytes.len()] == needle_bytes {
+            let before_ok = pos == 0 || !lower_bytes[pos - 1].is_ascii_alphanumeric();
+            let after = pos + needle_bytes.len();
+            let after_ok = after >= lower_bytes.len() || !lower_bytes[after].is_ascii_alphanumeric();
+            if before_ok && after_ok {
+                return true;
+            }
         }
-        rest = &rest[end + 2..];
+        pos += 1;
+    }
+    false
+}
+
+/// 规则命中：纯英文（含空格短语）关键词整词匹配；含中文的关键词子串匹配。
+fn tag_rule_hits(lower: &str, words: &[&str]) -> bool {
+    words.iter().any(|word| {
+        if word.chars().all(|c| c.is_ascii_alphabetic() || c == ' ') {
+            contains_english_word(lower, word)
+        } else {
+            lower.contains(word)
+        }
+    })
+}
+
+fn infer_data_domain_tags(text: &str) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let rules: &[(&str, &[&str])] = &[
+        (
+            "数据采集",
+            &["采集", "ingestion", "采样", "sensor", "埋点", "cdc"],
+        ),
+        (
+            "数据存储",
+            &[
+                "存储",
+                "database",
+                "storage",
+                "lakehouse",
+                "warehouse",
+                "数据库",
+                "数据湖",
+            ],
+        ),
+        (
+            "数据计算",
+            &["计算", "compute", "spark", "flink", "查询", "query", "引擎"],
+        ),
+        (
+            "数据治理",
+            &[
+                "治理",
+                "governance",
+                "metadata",
+                "元数据",
+                "血缘",
+                "catalog",
+            ],
+        ),
+        (
+            "数据质量",
+            &["质量", "quality", "清洗", "validation", "异常检测"],
+        ),
+        (
+            "数据安全",
+            &["安全", "security", "privacy", "隐私", "脱敏", "权限"],
+        ),
+        (
+            "数据传输",
+            &["传输", "stream", "流式", "消息队列", "kafka", "同步"],
+        ),
+        (
+            "数据智能",
+            &[
+                "机器学习",
+                "machine learning",
+                "llm",
+                "ai",
+                "智能",
+                "rag",
+                "agent",
+            ],
+        ),
+    ];
+    let mut tags = rules
+        .iter()
+        .filter(|(_, words)| tag_rule_hits(&lower, words))
+        .map(|(label, _)| (*label).to_string())
+        .take(3)
+        .collect::<Vec<_>>();
+    if tags.is_empty() {
+        tags.push(DATA_DOMAIN_FALLBACK_TAG.to_string());
+    }
+    tags
+}
+
+fn inferred_graph_relation(
+    source: &GraphPage,
+    target: Option<&GraphPage>,
+    shared_terms: &[String],
+) -> String {
+    let Some(target) = target else {
+        return "研究延伸".to_string();
+    };
+    let source_text = graph_relation_text(source);
+    let target_text = graph_relation_text(target);
+    let shared_text = shared_terms.join(" ").to_lowercase();
+
+    // Data engineering domains are intentionally checked before generic
+    // research labels so the graph answers "what kind of relationship".
+    let domain_rules: &[(&str, &[&str])] = &[
+        ("数据采集", &["采集", "ingestion", "ingest", "cdc", "sensor", "capture", "source"]),
+        ("数据存储", &["存储", "storage", "lakehouse", "data lake", "warehouse", "database", "parquet", "delta lake", "table"]),
+        ("数据计算", &["计算", "compute", "query", "spark", "flink", "stream processing", "processing", "engine", "throughput", "latency"]),
+        ("数据治理", &["治理", "governance", "metadata", "元数据", "lineage", "血缘", "catalog", "policy"]),
+        ("数据质量", &["质量", "quality", "validation", "cleaning", "cleansing", "completeness", "accuracy", "anomaly"]),
+        ("数据安全", &["安全", "security", "privacy", "隐私", "access control", "encryption", "federated", "threat"]),
+    ];
+    for (label, keywords) in domain_rules {
+        if keywords.iter().any(|keyword| {
+            source_text.contains(keyword) && target_text.contains(keyword)
+                || shared_text.contains(keyword)
+        }) {
+            return (*label).to_string();
+        }
+    }
+
+    let source_title = source.title.to_lowercase();
+    let target_title = target.title.to_lowercase();
+    let is_review = |title: &str| {
+        ["survey", "review", "overview", "taxonomy", "综述", "概览"]
+            .iter()
+            .any(|term| title.contains(term))
+    };
+    if is_review(&source_title) || is_review(&target_title) {
+        return "研究基础".to_string();
+    }
+    if ["evaluation", "benchmark", "评测", "基准"]
+        .iter()
+        .any(|term| source_title.contains(term) || target_title.contains(term) || shared_text.contains(term))
+    {
+        return "评测方法".to_string();
+    }
+    if ["production", "deployment", "platform", "architecture", "implementation", "system", "平台", "架构", "落地"]
+        .iter()
+        .any(|term| source_text.contains(term) || target_text.contains(term))
+    {
+        return if source.content_kind == "technical_article" || target.content_kind == "technical_article" {
+            "工程落地".to_string()
+        } else {
+            "方法改进".to_string()
+        };
+    }
+    if !shared_terms.is_empty() {
+        "方法改进".to_string()
+    } else if source.content_kind == "technical_article" || target.content_kind == "technical_article" {
+        "工程落地".to_string()
+    } else {
+        "研究延伸".to_string()
+    }
+}
+
+fn graph_relation_text(page: &GraphPage) -> String {
+    format!(
+        "{} {} {} {} {}",
+        page.title.to_lowercase(),
+        page.title_zh.to_lowercase(),
+        page.tags.join(" ").to_lowercase(),
+        page.summary.to_lowercase(),
+        page.terms.keys().cloned().collect::<Vec<_>>().join(" ").to_lowercase(),
+    )
+}
+
+fn extract_graph_links(content: &str) -> Vec<GraphLink> {
+    let mut out = Vec::new();
+    for line in content.lines() {
+        let mut rest = line;
+        while let Some(start) = rest.find("[[") {
+            rest = &rest[start + 2..];
+            let Some(end) = rest.find("]]") else { break };
+            let inner = &rest[..end];
+            let mut parts = inner.splitn(2, '|');
+            let target = parts.next().unwrap_or("").trim();
+            let alias = parts.next().unwrap_or("").trim();
+            let raw_tail = rest[end + 2..].trim_start();
+            let has_relation_separator = raw_tail.starts_with([':', '：', '—', '–']);
+            let tail = raw_tail.trim_start_matches(|character: char| {
+                character.is_whitespace() || matches!(character, ':' | '：' | '—' | '–')
+            });
+            let trailing = if has_relation_separator { tail } else { "" }
+                .split(['。', '；', ';', ',', '，', '|'])
+                .next()
+                .unwrap_or("")
+                .trim()
+                .chars()
+                .take(18)
+                .collect::<String>();
+            if !target.is_empty() {
+                out.push(GraphLink {
+                    target: target.to_string(),
+                    relation: if trailing.is_empty() {
+                        alias.to_string()
+                    } else {
+                        trailing
+                    },
+                });
+            }
+            rest = &rest[end + 2..];
+        }
     }
     out
+}
+
+fn extract_wikilinks(content: &str) -> Vec<String> {
+    extract_graph_links(content)
+        .into_iter()
+        .map(|link| link.target)
+        .collect()
 }
 
 fn resolve_link(raw: &str, ids: &BTreeSet<String>) -> Option<String> {
@@ -3699,7 +4060,12 @@ fn resolve_link(raw: &str, ids: &BTreeSet<String>) -> Option<String> {
     let path_name = raw.rsplit(['/', '\\']).next().unwrap_or(raw);
     let normalized = path_name.to_lowercase().replace(' ', "-");
     ids.iter()
-        .find(|id| id.to_lowercase() == normalized || id.to_lowercase() == path_name.to_lowercase())
+        .find(|id| {
+            let id_name = id.rsplit('/').next().unwrap_or(id);
+            id.to_lowercase() == normalized
+                || id_name.to_lowercase().replace(' ', "-") == normalized
+                || id_name.eq_ignore_ascii_case(path_name)
+        })
         .cloned()
 }
 
@@ -3793,6 +4159,20 @@ mod tests {
     }
 
     #[test]
+    fn relative_to_project_handles_canonical_project_paths() {
+        let root = test_project_dir();
+        let papers = root.join("wiki/papers");
+        fs::create_dir_all(&papers).unwrap();
+        let file = papers.join("paper.md");
+        fs::write(&file, "# Paper").unwrap();
+
+        let canonical_file = file.canonicalize().unwrap();
+        let relative = relative_to_project(&root.to_string_lossy(), &canonical_file);
+        assert_eq!(relative, "wiki/papers/paper.md");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn graph_adds_keyword_similarity_edges_between_papers() {
         let root = test_project_dir();
         let papers = root.join("wiki/papers");
@@ -3821,6 +4201,66 @@ mod tests {
                     || (edge.source == "papers/photonic-b" && edge.target == "papers/photonic-a"))
                 && !edge.shared_terms.is_empty()
         }));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn domain_tags_are_normalized_to_the_fixed_chinese_taxonomy() {
+        // 1) 入库时模型生造的体系外标签（如“评测方法/研究基础”）会被丢弃并重新推断；
+        // 2) 英文关键词按整词匹配，避免 "ai" 误命中 "available"。
+        let root = test_project_dir();
+        let sources = root.join("wiki/sources");
+        fs::create_dir_all(&sources).unwrap();
+        fs::write(
+            sources.join("eval-stream.md"),
+            "---\ntype: paper\ntitle: Stream processing evaluation\ncontent_kind: paper\ndomain_tags: [数据计算, 评测方法]\n---\n# Stream processing evaluation\n\nFlink and Kafka based stream processing with throughput measurement and query engine benchmarks.\n",
+        )
+        .unwrap();
+        fs::write(
+            sources.join("privacy.md"),
+            "---\ntype: paper\ntitle: ML privacy attack survey\ncontent_kind: paper\ndomain_tags: [研究基础, ML]\n---\n# ML privacy attack survey\n\nPrivacy attacks and defense mechanisms with security guarantees for available datasets.\n",
+        )
+        .unwrap();
+
+        let (nodes, _) = build_graph(root.to_string_lossy().as_ref()).unwrap();
+        let eval_node = nodes.iter().find(|node| node.id == "sources/eval-stream").unwrap();
+        // 体系外的“评测方法”被丢弃；保留的“数据计算”仍在体系内。
+        assert_eq!(eval_node.tags, vec!["数据计算"]);
+
+        let privacy_node = nodes.iter().find(|node| node.id == "sources/privacy").unwrap();
+        // “研究基础”与英文 “ML” 都被丢弃后，按正文推断出体系内标签；
+        // “available” 不能因包含 “ai” 而被误标为 数据智能。
+        assert!(privacy_node.tags.iter().any(|tag| tag == "数据安全"));
+        assert!(!privacy_node.tags.iter().any(|tag| tag == "数据智能"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn graph_exposes_library_metadata_and_semantic_relations() {
+        let root = test_project_dir();
+        let sources = root.join("wiki/sources");
+        fs::create_dir_all(&sources).unwrap();
+        fs::write(
+            sources.join("streaming.md"),
+            "---\ntype: source\ntitle: Streaming architecture\ntitle_zh: 流式数据架构实践\ncontent_kind: technical_article\ndomain_tags: [数据采集, 数据传输]\nauthors: [数据平台团队]\nyear: 2026\nsummary: 介绍生产环境中的流式数据链路。\n---\n# 流式数据架构实践\n\n## 关联关系\n- [[storage]]：工程依赖\n",
+        ).unwrap();
+        fs::write(
+            sources.join("storage.md"),
+            "---\ntype: paper\ntitle: Distributed storage\ncontent_kind: paper\n---\n# Distributed storage\n",
+        ).unwrap();
+
+        let (nodes, edges) = build_graph(root.to_string_lossy().as_ref()).unwrap();
+        let article = nodes
+            .iter()
+            .find(|node| node.id == "sources/streaming")
+            .unwrap();
+        assert_eq!(article.title_zh, "流式数据架构实践");
+        assert_eq!(article.content_kind, "technical_article");
+        assert_eq!(article.tags, vec!["数据采集", "数据传输"]);
+        assert_eq!(article.year, Some(2026));
+        assert!(edges.iter().any(|edge| edge.source == "sources/streaming"
+            && edge.target == "sources/storage"
+            && edge.relation == "工程依赖"));
         let _ = fs::remove_dir_all(root);
     }
 

@@ -135,7 +135,6 @@ async function rebuildGraph() {
   const validNodes = props.nodes.filter(node => graphNodeId(node))
   const validIds = new Set(validNodes.map(graphNodeId))
   const validEdges = props.edges.filter(edge => {
-    if (text(edge.kind, 'wikilink').toLowerCase() === 'keyword_similarity') return false
     const source = text(edge.source)
     const target = text(edge.target)
     return source && target && source !== target && validIds.has(source) && validIds.has(target)

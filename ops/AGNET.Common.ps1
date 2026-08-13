@@ -1,4 +1,4 @@
-Set-StrictMode -Version 2.0
+﻿Set-StrictMode -Version 2.0
 
 $script:AGNETOpsRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:AGNETRepositoryRoot = Split-Path -Parent $script:AGNETOpsRoot
@@ -165,6 +165,43 @@ function Wait-AGNETHttp {
         }
     }
     throw "Timed out waiting for $Uri. Last error: $lastError"
+}
+
+function Get-AGNETHermesModelConfig {
+    param([Parameter(Mandatory = $true)][string]$HermesHome)
+
+    $result = [ordered]@{
+        Provider   = ""
+        Model      = ""
+        BaseUrl    = ""
+        KeyEnv     = ""
+        ConfigPath = ""
+    }
+    $configPath = Join-Path $HermesHome "config.yaml"
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        return $result
+    }
+    $text = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8
+    $result.ConfigPath = $configPath
+
+    # 只解析 `model:` 块，避免 mcp_servers 里其它 base_url 干扰。
+    $modelBlock = ""
+    if ($text -match '(?s)model:\s*\n(.*?)(?=\n\S[^:]*:)') { $modelBlock = $Matches[1] }
+    if ($modelBlock -match '(?m)^\s*default:\s*"?([^"\s#]+)"?') { $result.Model = $Matches[1] }
+    if ($modelBlock -match '(?m)^\s*provider:\s*"?([^"\s#]+)"?') { $result.Provider = $Matches[1] }
+
+    # 只解析 `custom_providers:` 块，取第一个同时带 base_url 和 key_env 的条目。
+    $customBlock = ""
+    if ($text -match '(?s)custom_providers:\s*\n(.*?)(?=\n\S[^:]*:|\z)') { $customBlock = $Matches[1] }
+    if ($customBlock -match '(?m)^\s*base_url:\s*"?([^"\s#]+)"?') { $result.BaseUrl = $Matches[1] }
+    if ($customBlock -match '(?m)^\s*key_env:\s*"?([^"\s#]+)"?') { $result.KeyEnv = $Matches[1] }
+    return $result
+}
+
+function Test-AGNETEnvVariableSet {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    return -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Name, "Process")) -or
+        -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Name, "User"))
 }
 
 function Get-AGNETListeningAddresses {

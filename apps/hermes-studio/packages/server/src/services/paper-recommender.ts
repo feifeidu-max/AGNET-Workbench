@@ -21,9 +21,12 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { createHash } from 'crypto'
 import { config } from '../config'
+import { logger } from './logger'
 import { llmWikiJson, LlmWikiApiError, publicKnowledgeErrorMessage } from './knowledge/llm-wiki-client'
-import { nextScheduledRunAt, recordPaperRecommenderRun } from './paper-recommender-job'
+import { getActiveProfileName } from './hermes/hermes-profile'
+import { ensurePaperRecommenderJob, nextScheduledRunAt, recordPaperRecommenderRun, runPaperRecommenderAgentJob } from './paper-recommender-job'
 
 const RECOMMEND_INTERVAL_MS = 6 * 60 * 60 * 1000
 const FIRST_RUN_DELAY_MS = 30 * 1000
@@ -56,6 +59,51 @@ const DATA_DOMAIN_TERMS = [
   'spark', 'flink', 'kafka', 'ingestion', 'catalog',
 ]
 const EXCLUDED_DOMAIN_TERMS = ['point cloud', 'voxel', 'near-memory accelerator', 'neural accelerator']
+/**
+ * 论文中文标签：与 LLM-Wiki 的 infer_data_domain_tags 完全一致的关键词规则。
+ * 标签集合固定（8 个数据方向域 + 兜底），只输出中文，不随论文数量增长。
+ */
+export const DOMAIN_TAG_RULES: Array<[string, string[]]> = [
+  ['数据采集', ['采集', 'ingestion', '采样', 'sensor', '埋点', 'cdc']],
+  ['数据存储', ['存储', 'database', 'storage', 'lakehouse', 'warehouse', '数据库', '数据湖']],
+  ['数据计算', ['计算', 'compute', 'spark', 'flink', '查询', 'query', '引擎']],
+  ['数据治理', ['治理', 'governance', 'metadata', '元数据', '血缘', 'catalog']],
+  ['数据质量', ['质量', 'quality', '清洗', 'validation', '异常检测']],
+  ['数据安全', ['安全', 'security', 'privacy', '隐私', '脱敏', '权限']],
+  ['数据传输', ['传输', 'stream', '流式', '消息队列', 'kafka', '同步']],
+  ['数据智能', ['机器学习', 'machine learning', 'llm', 'ai', '智能', 'rag', 'agent']],
+]
+
+export const KNOWN_DOMAIN_TAGS = ['数据采集', '数据存储', '数据计算', '数据治理', '数据质量', '数据安全', '数据传输', '数据智能']
+export const FALLBACK_DOMAIN_TAG = '数据技术'
+
+/** 与 LLM-Wiki（src-tauri api_server.rs infer_data_domain_tags）同款的关键词提取，最多 3 个标签。 */
+export function inferDomainTags(text: string): string[] {
+  const lower = String(text || '').toLowerCase()
+  const tags = DOMAIN_TAG_RULES
+    .filter(([, words]) => words.some((word) => lower.includes(word)))
+    .map(([label]) => label)
+    .slice(0, 3)
+  return tags.length > 0 ? tags : [FALLBACK_DOMAIN_TAG]
+}
+
+function normalizeTags(value: unknown, fallbackText: string): string[] {
+  const known = new Set(KNOWN_DOMAIN_TAGS)
+  const fromValue = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && known.has(item.trim()))
+      .map((item) => item.trim())
+    : []
+  const seen = new Set<string>()
+  const merged: string[] = []
+  for (const tag of [...fromValue, ...inferDomainTags(fallbackText)]) {
+    if (!seen.has(tag)) {
+      seen.add(tag)
+      merged.push(tag)
+    }
+  }
+  return merged.slice(0, 3)
+}
+
 // 候选本身不含 venue 字段，需要根据 DOI 向 Crossref/OpenAlex 反查会议/期刊名称，
 // 再按数据系统及通用 CS 顶级 venue 白名单过滤。白名单使用完整刊名和常见缩写，
 // 避免把普通的“大数据”期刊误标成顶级论文。
@@ -103,6 +151,12 @@ export interface PaperRecommendation {
   reason: string | null
   venue: string | null
   doi: string | null
+  /** 中文标签：由 LLM-Wiki 同款关键词规则提取，固定为数据方向域标签。 */
+  tags?: string[]
+  /** 本次刷新新检索到的论文（与上一轮结果对比，供前端差异化标注）。 */
+  newlyFound?: boolean
+  /** 该论文被搜出来的时间（ISO）。新搜出的=本次 generatedAt；旧论文保留首次搜出时间。 */
+  foundAt?: string | null
 }
 
 export interface PaperRecommendationsPayload {
@@ -121,6 +175,16 @@ export interface PaperRecommendationsPayload {
 function recommendationsPath(): string {
   return join(config.appHome, 'paper-recommendations.json')
 }
+
+function itemKey(item: PaperRecommendation): string {
+  return String(item.doi ?? item.url ?? item.id ?? item.title ?? '').toLowerCase()
+}
+
+/**
+ * 手动刷新时记录上一轮结果（论文 + 生成时间），作为“新发现/搜出时间”对比基线。
+ * 覆盖 pending 前快照，避免 pending（items 为空）冲掉对比依据。
+ */
+let manualRefreshBaseline: { items: PaperRecommendation[]; generatedAt: string | null } | null = null
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
@@ -145,17 +209,20 @@ function normalizeCandidate(value: unknown): PaperRecommendation | null {
   const item = value as Record<string, unknown>
   const id = asString(item.id ?? item.doi ?? item.url)
   if (!id) return null
+  const title = asString(item.title, '未命名论文')
+  const abstract = asNullableString(item.abstract ?? item.summary)
   return {
     id,
-    title: asString(item.title, '未命名论文'),
+    title,
     authors: asStringArray(item.authors),
     year: asNullableNumber(item.year),
-    abstract: asNullableString(item.abstract ?? item.summary),
+    abstract,
     url: asNullableString(item.url),
     provider: asNullableString(item.provider ?? item.source),
     reason: asNullableString(item.reason ?? item.recommendedReason ?? item.recommended_reason),
     venue: asNullableString(item.venue ?? item.journal ?? item.containerTitle ?? item.container_title),
     doi: asNullableString(item.doi),
+    tags: normalizeTags(item.tags ?? item.domain_tags, `${title} ${abstract ?? ''}`),
   }
 }
 
@@ -549,7 +616,119 @@ async function fetchCandidates(
   const chosen = sorted
     .slice(0, MAX_ITEMS)
     .map(({ enrichResolved, ...rest }) => rest)
+    .map((item) => ({ ...item, tags: normalizeTags(item.tags, `${item.title} ${item.abstract ?? ''}`) }))
   return { items: chosen, viaSearch, topVenueOnly: topVenue.length > 0 }
+}
+
+const RECOMMENDED_DRAFTS_STATE_FILE = 'recommended-drafts.json'
+
+function normalizePaperTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/gi, ' ').trim()
+}
+
+function slugifyPaperTitle(title: string): string {
+  const ascii = title.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60)
+  const hash = createHash('sha256').update(title).digest('hex').slice(0, 8)
+  return `${ascii || 'paper'}-${hash}`
+}
+
+function quoteFrontmatter(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')}"`
+}
+
+/**
+ * 推荐论文默认转入审核队列：为每篇新推荐的论文生成审核草稿（题录 + 摘要 + 推荐理由 + 原文链接），
+ * 批准后发布为 wiki/papers/<slug>.md 论文页。去重：本地转换记录 + 现有草稿标题。
+ */
+async function syncRecommendedDrafts(items: PaperRecommendation[]): Promise<void> {
+  if (!Array.isArray(items) || items.length === 0) return
+  const statePath = join(config.appHome, RECOMMENDED_DRAFTS_STATE_FILE)
+  let converted: Record<string, string> = {}
+  try {
+    if (existsSync(statePath)) {
+      const parsed = JSON.parse(readFileSync(statePath, 'utf-8'))
+      if (parsed && typeof parsed === 'object') converted = parsed as Record<string, string>
+    }
+  } catch {
+    converted = {}
+  }
+
+  // 现有草稿标题集合（含已入库/已拒绝，避免重复生成）
+  const existingTitles = new Set<string>()
+  try {
+    const drafts = await llmWikiJson<Record<string, unknown>>('/projects/current/ingest-drafts')
+    const list = Array.isArray(drafts.drafts) ? (drafts.drafts as Record<string, unknown>[]) : []
+    for (const d of list) {
+      const t = typeof d?.paperTitle === 'string' ? d.paperTitle : (typeof d?.title === 'string' ? d.title : '')
+      if (t.trim()) existingTitles.add(normalizePaperTitle(t))
+    }
+  } catch (err) {
+    logger.warn(err, '[paper-recommender] failed to list drafts for dedup')
+  }
+
+  for (const item of items) {
+    const title = asString(item.title, '').trim()
+    if (!title) continue
+    const key = normalizePaperTitle(title)
+    if (converted[key] || existingTitles.has(key)) continue
+    try {
+      const targetPath = `wiki/papers/${slugifyPaperTitle(title)}.md`
+      const authors = Array.isArray(item.authors) ? item.authors.filter((a) => typeof a === 'string' && a.trim()) : []
+      const content = [
+        '---',
+        'type: paper',
+        `title: ${quoteFrontmatter(title)}`,
+        'content_kind: paper',
+        `domain_tags: [${(item.tags ?? []).map((t) => quoteFrontmatter(t)).join(', ')}]`,
+        `authors: [${authors.map((a) => quoteFrontmatter(a)).join(', ')}]`,
+        ...(item.year ? [`year: ${item.year}`] : []),
+        ...(item.venue ? [`venue: ${quoteFrontmatter(item.venue)}`] : []),
+        ...(item.doi ? [`doi: ${quoteFrontmatter(item.doi)}`] : []),
+        ...(item.url ? [`source_url: ${quoteFrontmatter(item.url)}`] : []),
+        'summary: "由论文推荐任务自动生成的审核草稿，含题录、摘要与推荐理由；批准前请核对原文。"',
+        '---',
+        '',
+        `# ${title}`,
+        '',
+        ...(authors.length ? [`**作者**：${authors.join('、')}`, ''] : []),
+        ...(item.venue ? [`**会议/期刊**：${item.venue}`, ''] : []),
+        ...(item.year ? [`**年份**：${item.year}`, ''] : []),
+        ...(item.doi ? [`**DOI**：${item.doi}`, ''] : []),
+        ...(item.abstract ? ['## 摘要', '', item.abstract, ''] : []),
+        ...(item.reason ? ['## 推荐理由', '', item.reason, ''] : []),
+        '## 原文链接',
+        '',
+        item.url ? `[${item.url}](${item.url})` : '（无链接，请自行查找原文）',
+        '',
+        '> 本页由“论文推荐（本地知识库 · 顶会优先）”任务自动生成，仅包含题录与摘要，请阅读原文后核实内容再批准。',
+      ].join('\n')
+      await llmWikiJson(
+        '/projects/current/generated-drafts',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, targetPath, content }),
+        },
+        30_000,
+      )
+      converted[key] = targetPath
+      logger.info('[paper-recommender] recommended paper staged as review draft: %s', title)
+    } catch (err) {
+      if (err instanceof LlmWikiApiError && err.status === 409) {
+        // 内容重复（llm-wiki 侧已存在同内容草稿）
+        converted[key] = 'existing'
+      } else {
+        logger.warn(err, '[paper-recommender] failed to stage recommended draft: %s', title)
+      }
+    }
+  }
+
+  try {
+    mkdirSync(config.appHome, { recursive: true })
+    writeFileSync(statePath, `${JSON.stringify(converted, null, 2)}\n`, 'utf-8')
+  } catch {
+    // 记录失败不影响主流程
+  }
 }
 
 export async function generateRecommendations(): Promise<PaperRecommendationsPayload> {
@@ -559,7 +738,10 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
     const kb = await buildFocusFromKnowledgeBase()
     const { items, topVenueOnly } = await fetchCandidates(kb)
     const paperCount = kb?.paperCount ?? 0
-    const previous = loadRecommendations()
+    const onDisk = loadRecommendations()
+    const previous = onDisk.status === 'pending' && lastGoodItems.length > 0
+      ? { ...onDisk, status: 'partial', items: lastGoodItems, generatedAt: lastGoodGeneratedAt ?? onDisk.generatedAt }
+      : onDisk
     if (items.length === 0 && previous.items.length > 0) {
       const preserved: PaperRecommendationsPayload = {
         ...previous,
@@ -571,6 +753,9 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
       }
       persist(preserved)
       recordPaperRecommenderRun(preserved.status, preserved.error)
+      void syncRecommendedDrafts(preserved.items).catch((err) => {
+        logger.warn(err, '[paper-recommender] sync recommended drafts failed (preserved)')
+      })
       return preserved
     }
     const payload: PaperRecommendationsPayload = {
@@ -591,6 +776,10 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
     }
     persist(payload)
     recordPaperRecommenderRun(payload.status, payload.error)
+    // 推荐论文默认转入审核队列：新推荐（此前未出现过的）自动生成审核草稿
+    void syncRecommendedDrafts(payload.items).catch((err) => {
+      logger.warn(err, '[paper-recommender] sync recommended drafts failed')
+    })
     return payload
   } catch (error) {
     const message = error instanceof LlmWikiApiError
@@ -610,10 +799,47 @@ export async function generateRecommendations(): Promise<PaperRecommendationsPay
   }
 }
 
+/** 内存中最近一轮非 pending 的有效推荐结果（供“保留上一轮”逻辑在 pending 覆盖后仍可用）。 */
+let lastGoodItems: PaperRecommendation[] = []
+let lastGoodGeneratedAt: string | null = null
+
 function persist(payload: PaperRecommendationsPayload): void {
   try {
     mkdirSync(config.appHome, { recursive: true })
-    writeFileSync(recommendationsPath(), `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
+    if (Array.isArray(payload.items) && payload.items.length > 0) {
+      // 对比依据：手动刷新用按钮前的快照；定时/agent 回写用磁盘上一轮结果。
+      let prevItems: PaperRecommendation[] = []
+      let prevGeneratedAt: string | null = null
+      if (manualRefreshBaseline) {
+        prevItems = manualRefreshBaseline.items
+        prevGeneratedAt = manualRefreshBaseline.generatedAt
+        manualRefreshBaseline = null
+      } else {
+        const previous = loadRecommendations()
+        if (previous.status !== 'pending') {
+          prevItems = previous.items
+          prevGeneratedAt = previous.generatedAt
+        }
+      }
+      const prevByKey = new Map(prevItems.map((it) => [itemKey(it), it]))
+      // 旧论文无 foundAt 时，用上一轮的生成时间兜底（至少知道“不晚于该时间已存在”）。
+      const backfillAt = prevGeneratedAt ?? new Date().toISOString()
+      for (const item of payload.items) {
+        const old = prevByKey.get(itemKey(item))
+        if (old) {
+          item.newlyFound = false
+          item.foundAt = old.foundAt ?? backfillAt
+        } else {
+          item.newlyFound = true
+          item.foundAt = payload.generatedAt
+        }
+      }
+    }
+        if (Array.isArray(payload.items) && payload.items.length > 0 && payload.status !== 'pending') {
+      lastGoodItems = payload.items
+      lastGoodGeneratedAt = payload.generatedAt
+    }
+writeFileSync(recommendationsPath(), `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
   } catch {
     // 持久化失败不应中断调度；内存中的 payload 仍会被返回给调用方。
   }
@@ -654,18 +880,23 @@ export function saveAgentRecommendations(rawItems: unknown[]): PaperRecommendati
   const items: PaperRecommendation[] = (Array.isArray(rawItems) ? rawItems : [])
     .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && typeof (x as any).title === 'string')
     .slice(0, MAX_ITEMS)
-    .map((r): PaperRecommendation => ({
-      id: asString(r.id ?? r.doi ?? r.url ?? r.title),
-      title: asString(r.title, '未命名论文'),
-      authors: asStringArray(r.authors),
-      year: asNullableNumber(r.year),
-      abstract: asNullableString(r.abstract ?? r.summary),
-      url: asNullableString(r.url),
-      provider: asNullableString(r.provider ?? r.source) ?? 'agent',
-      reason: asNullableString(r.reason ?? r.recommendedReason ?? r.recommended_reason),
-      venue: asNullableString(r.venue),
-      doi: asNullableString(r.doi),
-    }))
+    .map((r): PaperRecommendation => {
+      const title = asString(r.title, '未命名论文')
+      const abstract = asNullableString(r.abstract ?? r.summary)
+      return {
+        id: asString(r.id ?? r.doi ?? r.url ?? r.title),
+        title,
+        authors: asStringArray(r.authors),
+        year: asNullableNumber(r.year),
+        abstract,
+        url: asNullableString(r.url),
+        provider: asNullableString(r.provider ?? r.source) ?? 'agent',
+        reason: asNullableString(r.reason ?? r.recommendedReason ?? r.recommended_reason),
+        venue: asNullableString(r.venue),
+        doi: asNullableString(r.doi),
+        tags: normalizeTags(r.tags ?? r.domain_tags, `${title} ${abstract ?? ''}`),
+      }
+    })
   const payload: PaperRecommendationsPayload = {
     status: items.length > 0 ? 'success' : 'partial',
     generatedAt,
@@ -680,7 +911,53 @@ export function saveAgentRecommendations(rawItems: unknown[]): PaperRecommendati
   }
   persist(payload)
   recordPaperRecommenderRun(payload.status, payload.error)
+  // 推荐论文默认转入审核队列：新推荐自动生成审核草稿
+  void syncRecommendedDrafts(payload.items).catch((err) => {
+    logger.warn(err, '[paper-recommender] sync recommended drafts failed (agent)')
+  })
   return payload
+}
+
+/**
+ * 手动刷新：按下按钮后执行“论文推荐（本地知识库 · 顶会优先）”任务。
+ * 1) 先持久化 pending 状态，让前端立即看到“任务已启动”。
+ * 2) 后台触发 Hermes cron 任务（agent 模式，网关 ticker 会真正执行联网检索）。
+ * 3) 同时后台兜底运行本地引擎，保证按钮一定有结果（与定时刷新同源）。
+ * 返回 pending 载荷；前端轮询 GET 直到状态离开 pending。
+ */
+export async function triggerPaperRecommendationRefresh(): Promise<PaperRecommendationsPayload> {
+  const pending: PaperRecommendationsPayload = {
+    ...emptyPayload('pending'),
+    generatedAt: new Date().toISOString(),
+    nextRunAt: nextScheduledRunAt(),
+    error: '论文推荐任务已启动：Hermes 正在基于本地知识库检索顶会论文…',
+  }
+  // 先快照“按下按钮前的上一轮结果”作为新发现/搜出时间基线，再覆盖 pending，
+  // 否则 loadRecommendations 会读到刚写入的 pending（items 为空）导致基线丢失。
+  const before = loadRecommendations()
+  if (before.status !== 'pending' && before.items.length > 0) {
+    manualRefreshBaseline = { items: before.items, generatedAt: before.generatedAt }
+  }
+  persist(pending)
+
+  // 手动执行“论文推荐（本地知识库 · 顶会优先）”Hermes cron 任务（agent 模式）。
+  try {
+    ensurePaperRecommenderJob()
+    const agent = runPaperRecommenderAgentJob(getActiveProfileName())
+    if (agent.started) {
+      logger.info('[paper-recommender] Hermes agent job triggered pid=%s', agent.pid ?? 'unknown')
+    } else {
+      logger.warn('[paper-recommender] Hermes agent job trigger failed: %s', agent.error || 'unknown')
+    }
+  } catch (err) {
+    logger.warn(err, '[paper-recommender] failed to trigger Hermes agent job')
+  }
+
+  // 本地引擎兜底：即使 agent 任务失败/未配置模型，按钮也能产出结果。
+  void refreshRecommendations().catch((err) => {
+    logger.warn(err, '[paper-recommender] background engine refresh failed')
+  })
+  return pending
 }
 
 let timer: ReturnType<typeof setInterval> | null = null
