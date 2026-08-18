@@ -3,6 +3,15 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $root
 
+# 0. 预检：Docker 引擎必须可用（Docker Desktop 需先启动，否则 compose 会静默失败）
+Write-Host "==> 检查 Docker 引擎..."
+cmd /c "docker info >nul 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[错误] 无法连接 Docker 引擎。请先启动 Docker Desktop，待其显示 ""Engine running"" 后重新运行本脚本。" -ForegroundColor Red
+    exit 1
+}
+Write-Host "[ok] Docker 引擎已就绪"
+
 # 1. 缺少 .env 时，复制模板并把占位令牌替换为随机值
 if (-not (Test-Path .env)) {
     Copy-Item .env.example .env
@@ -33,7 +42,11 @@ if (Test-Path .env) {
 }
 
 Write-Host "==> 拉起完整栈（含知识库；首次会自动构建镜像，含 Rust 编译，可能耗时数分钟）"
-docker compose --profile kb up -d
+cmd /c "docker compose --profile kb up -d 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[错误] docker compose 启动失败，请检查上方日志。" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host ""
 Write-Host "部署完成："
