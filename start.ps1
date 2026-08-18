@@ -1,4 +1,4 @@
-# AGNET 一行指令部署（Windows）：自动准备 .env 并拉起完整栈（WebUI + 知识库）
+﻿# AGNET 一行指令部署（Windows）：自动准备 .env 并拉起完整栈（WebUI + 知识库）
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $root
@@ -11,15 +11,23 @@ if (-not (Test-Path .env)) {
     $rng.GetBytes($bytes)
     $rng.Dispose()
     $token = [BitConverter]::ToString($bytes) -replace '-', ''
-    (Get-Content .env) -replace '^LLM_WIKI_API_TOKEN=.*', "LLM_WIKI_API_TOKEN=$token" | Set-Content .env
+    $envLines = Get-Content .env -Encoding UTF8 | ForEach-Object {
+        $_ -replace '^LLM_WIKI_API_TOKEN=.*', "LLM_WIKI_API_TOKEN=$token"
+    }
+    # 以 UTF-8（无 BOM）写回，保持与 .env.example 一致，避免 PS 5.1 按 ANSI 写坏中文注释
+    [System.IO.File]::WriteAllLines(
+        (Join-Path $PWD '.env'),
+        $envLines,
+        (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false)
+    )
     Write-Host "[ok] 已生成 .env（含随机 LLM_WIKI_API_TOKEN）"
 }
 
 # 2. 读取端口用于提示
 $port = '6060'; $wikiPort = '19828'
 if (Test-Path .env) {
-    $portLine = Get-Content .env | Where-Object { $_ -match '^PORT=' } | Select-Object -First 1
-    $wikiLine = Get-Content .env | Where-Object { $_ -match '^WIKI_PORT=' } | Select-Object -First 1
+    $portLine = Get-Content .env -Encoding UTF8 | Where-Object { $_ -match '^PORT=' } | Select-Object -First 1
+    $wikiLine = Get-Content .env -Encoding UTF8 | Where-Object { $_ -match '^WIKI_PORT=' } | Select-Object -First 1
     if ($portLine) { $port = $portLine -replace 'PORT=', '' }
     if ($wikiLine) { $wikiPort = $wikiLine -replace 'WIKI_PORT=', '' }
 }
