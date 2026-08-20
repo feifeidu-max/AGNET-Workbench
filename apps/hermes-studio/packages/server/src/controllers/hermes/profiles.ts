@@ -10,6 +10,8 @@ import {
   getGatewayRuntimeStatusForProfile,
   prepareGatewayForProfileDelete,
   restartGatewayForProfile as restartGatewayRuntimeForProfile,
+  startGatewayRuntimeForProfile,
+  stopGatewayRuntimeForProfile,
 } from '../../services/hermes/gateway-autostart'
 import { logger } from '../../services/logger'
 import { smartCloneCleanup, copyModelProviderAuthForClone } from '../../services/hermes/profile-credentials'
@@ -584,6 +586,53 @@ async function listProfilesForStatus(): Promise<HermesProfile[]> {
   return filterVisibleProfiles(profiles)
 }
 
+export async function startGatewayForProfile(ctx: any) {
+  const name = String(ctx.params.name || '').trim() || 'default'
+  if (denyProfile(ctx, name)) return
+  if (isForbiddenProfileName(name)) {
+    ctx.status = 400
+    ctx.body = { error: `Profile name '${name}' is reserved` }
+    return
+  }
+  try {
+    const gateway = await startGatewayRuntimeForProfile(name)
+    // 刷新运行时缓存
+    try {
+      const cached = runtimeStatusCache.get(name)?.status
+      if (cached) setRuntimeStatusCache({ ...cached, gateway: { ...cached.gateway, ...gateway, running: gateway.running } } as any)
+    } catch {}
+    ctx.body = { success: true, gateway }
+  } catch (err: any) {
+    ctx.status = 500
+    ctx.body = { error: err.message }
+  }
+}
+
+export async function stopGatewayForProfile(ctx: any) {
+  const name = String(ctx.params.name || '').trim() || 'default'
+  if (denyProfile(ctx, name)) return
+  if (isForbiddenProfileName(name)) {
+    ctx.status = 400
+    ctx.body = { error: `Profile name '${name}' is reserved` }
+    return
+  }
+  try {
+    const gateway = await stopGatewayRuntimeForProfile(name)
+    try {
+      const result = await bridgeCleanupClient().destroyProfile(name)
+      logger.info('[profiles] destroyed bridge sessions after gateway stop profile=%s destroyed=%s', name, result.destroyed)
+    } catch (err) { logger.warn(err, '[profiles] failed to destroy bridge sessions after gateway stop profile=%s', name) }
+    try {
+      const cached = runtimeStatusCache.get(name)?.status
+      if (cached) setRuntimeStatusCache({ ...cached, gateway: { ...cached.gateway, ...gateway, running: false } } as any)
+    } catch {}
+    ctx.body = { success: true, gateway }
+  } catch (err: any) {
+    ctx.status = 500
+    ctx.body = { error: err.message }
+  }
+}
+
 export async function restartGatewayForProfile(ctx: any) {
   const name = String(ctx.params.name || '').trim() || 'default'
   if (denyProfile(ctx, name)) return
@@ -846,3 +895,4 @@ export async function importProfile(ctx: any) {
     ctx.body = { error: err.message }
   }
 }
+

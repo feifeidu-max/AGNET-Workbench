@@ -1,17 +1,93 @@
+
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { NAlert, NButton, NEmpty, NSpin, NTag } from 'naive-ui'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { NAlert, NButton, NEmpty, NSpin, NTag, NSwitch, NInput, NCollapse, NCollapseItem, useMessage } from 'naive-ui'
+import { useRouter } from 'vue-router'
 import {
   fetchWorkbenchSummary,
   type ServiceStatus,
   type WorkbenchSummary,
 } from '@/api/workbench'
 import { getStoredUsername } from '@/api/client'
+import { useProfilesStore } from '@/stores/hermes/profiles'
+import { useSettingsStore } from '@/stores/hermes/settings'
+import { fetchProfileRuntimeStatus, startProfileGateway, stopProfileGateway, restartProfileGateway } from '@/api/hermes/profiles'
+import type { ProfileRuntimeStatus } from '@/api/hermes/profiles'
+import { fetchWeixinQrCode, pollWeixinQrStatus, saveWeixinCredentials } from '@/api/hermes/config'
+
+const message = useMessage()
+const router = useRouter()
+const profilesStore = useProfilesStore()
+const settingsStore = useSettingsStore()
 
 const loading = ref(false)
 const error = ref('')
 const summary = ref<WorkbenchSummary | null>(null)
 const username = ref(getStoredUsername())
+
+// --- Gateway state ---
+const gatewayStatus = ref<ProfileRuntimeStatus['gateway'] | null>(null)
+const gatewayLoading = ref(false)
+const gatewayAction = ref<'' | 'start' | 'stop' | 'restart'>('')
+const gatewayError = ref('')
+const activeProfileName = computed(() => profilesStore.activeProfileName || profilesStore.profiles.find(p=>p.active)?.name || 'default')
+const gatewayRunning = computed(() => gatewayStatus.value?.running === true)
+const gatewayUnified = computed(() => gatewayStatus.value?.unified === true)
+const gatewayTargetProfile = computed(() => gatewayStatus.value?.targetProfile || activeProfileName.value)
+
+// --- Weixin QR state ---
+const wxQrUrl = ref('')
+const wxQrId = ref('')
+const wxQrStatus = ref<'idle' | 'loading' | 'waiting' | 'scaned' | 'confirmed' | 'error' | 'expired'>('idle')
+let wxPollTimer: ReturnType<typeof setTimeout> | null = null
+const wxManualSaving = ref(false)
+const wxToken = ref('')
+const wxAccountId = ref('')
+const wxBaseUrl = ref('')
+
+const weixinConfigured = computed(() => {
+  const plat = (settingsStore.platforms as any)?.weixin || {}
+  const w = (settingsStore.weixin as any) || {}
+  const token = plat.token || w.token || wxToken.value
+  const accountId = plat.extra?.account_id || w.extra?.account_id || wxAccountId.value
+  return !!token && !!accountId
+})
+const weixinTokenDisplay = computed(() => {
+  const plat = (settingsStore.platforms as any)?.weixin || {}
+  const w = (settingsStore.weixin as any) || {}
+  return plat.token || w.token || ''
+})
+const weixinAccountDisplay = computed(() => {
+  const plat = (settingsStore.platforms as any)?.weixin || {}
+  const w = (settingsStore.weixin as any) || {}
+  return plat.extra?.account_id || w.extra?.account_id || plat.account_id || w.account_id || ''
+})
+
+function syncWeixinDraftsFromStore() {
+  const plat = (settingsStore.platforms as any)?.weixin || {}
+  const w = (settingsStore.weixin as any) || {}
+  wxToken.value = plat.token || w.token || ''
+  wxAccountId.value = plat.extra?.account_id || w.extra?.account_id || plat.account_id || w.account_id || ''
+  wxBaseUrl.value = plat.extra?.base_url || w.extra?.base_url || plat.base_url || ''
+}
+watch(() => [settingsStore.platforms, settingsStore.weixin], () => syncWeixinDraftsFromStore(), { deep: true })
+
+const gatewayAutoEnabled = computed({
+  get: () => settingsStore.gatewayAutoStart.enabled !== false,
+  set: (v: boolean) => { void toggleGatewayAutoStart(v) }
+})
+const gatewayAutoSaving = ref(false)
+async function toggleGatewayAutoStart(enabled: boolean) {
+  gatewayAutoSaving.value = true
+  try {
+    await settingsStore.saveSection('gatewayAutoStart', { enabled })
+    message.success(enabled ? '已开启 Gateway 自动启动' : '已关闭 Gateway 自动启动')
+  } catch (err: any) {
+    message.error(err?.message || '保存失败')
+  } finally {
+    gatewayAutoSaving.value = false
+  }
+}
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -146,12 +222,144 @@ async function loadSummary() {
   }
 }
 
+async function loadGateway() {
+  gatewayLoading.value = true
+  gatewayError.value = ''
+  try {
+    if (!profilesStore.profiles.length) await profilesStore.fetchProfiles()
+    if (!profilesStore.activeProfileName && profilesStore.profiles.length) await profilesStore.fetchProfiles()
+    const name = activeProfileName.value
+    const status = await fetchProfileRuntimeStatus(name)
+    gatewayStatus.value = status.gateway
+  } catch (err: any) {
+    gatewayError.value = err?.message || '无法获取 Gateway 状态'
+  } finally {
+    gatewayLoading.value = false
+  }
+}
+
+async function handleStartGateway() {
+  gatewayAction.value = 'start'
+  gatewayError.value = ''
+  try {
+    const gw = await startProfileGateway(activeProfileName.value)
+    gatewayStatus.value = gw
+    message.success('Gateway 已启动')
+    void loadSummary()
+  } catch (err: any) {
+    gatewayError.value = err?.message || '启动失败'
+    message.error(gatewayError.value)
+  } finally {
+    gatewayAction.value = ''
+  }
+}
+async function handleStopGateway() {
+  gatewayAction.value = 'stop'
+  gatewayError.value = ''
+  try {
+    const gw = await stopProfileGateway(activeProfileName.value)
+    gatewayStatus.value = gw
+    message.success('Gateway 已停止')
+    void loadSummary()
+  } catch (err: any) {
+    gatewayError.value = err?.message || '停止失败'
+    message.error(gatewayError.value)
+  } finally {
+    gatewayAction.value = ''
+  }
+}
+async function handleRestartGateway() {
+  gatewayAction.value = 'restart'
+  gatewayError.value = ''
+  try {
+    const gw = await restartProfileGateway(activeProfileName.value)
+    gatewayStatus.value = gw
+    message.success('Gateway 已重启')
+    void loadSummary()
+  } catch (err: any) {
+    gatewayError.value = err?.message || '重启失败'
+    message.error(gatewayError.value)
+  } finally {
+    gatewayAction.value = ''
+  }
+}
+
+async function startWeixinQrLogin() {
+  wxQrStatus.value = 'loading'
+  wxQrUrl.value = ''
+  wxQrId.value = ''
+  stopWeixinPoll()
+  try {
+    const data = await fetchWeixinQrCode()
+    wxQrId.value = data.qrcode
+    wxQrUrl.value = data.qrcode_url
+    if (data.qrcode_url) window.open(data.qrcode_url, '_blank')
+    wxQrStatus.value = 'waiting'
+    pollWeixinStatus()
+  } catch (err: any) {
+    wxQrStatus.value = 'error'
+    message.error(err.message || '获取二维码失败')
+  }
+}
+function pollWeixinStatus() {
+  if (!wxQrId.value) return
+  wxPollTimer = setTimeout(async () => {
+    try {
+      const data = await pollWeixinQrStatus(wxQrId.value)
+      if (data.status === 'wait') {
+        pollWeixinStatus()
+      } else if (data.status === 'scaned' || data.status === 'scaned_but_redirect') {
+        wxQrStatus.value = 'scaned'
+        pollWeixinStatus()
+      } else if (data.status === 'expired') {
+        wxQrStatus.value = 'expired'
+        message.warning('二维码已过期，请重新获取')
+      } else if (data.status === 'confirmed') {
+        wxQrStatus.value = 'confirmed'
+        await saveWeixinCredentials({ account_id: data.account_id!, token: data.token!, base_url: data.base_url })
+        await settingsStore.fetchSettings()
+        syncWeixinDraftsFromStore()
+        message.success('微信已绑定，Gateway 正在重启...')
+        void loadGateway()
+        void loadSummary()
+      }
+    } catch {
+      pollWeixinStatus()
+    }
+  }, 2500)
+}
+function stopWeixinPoll() {
+  if (wxPollTimer) { clearTimeout(wxPollTimer); wxPollTimer = null }
+}
+async function handleSaveWeixinManual() {
+  if (!wxToken.value.trim() || !wxAccountId.value.trim()) {
+    message.warning('请填写 Token 与 Account ID')
+    return
+  }
+  wxManualSaving.value = true
+  try {
+    await saveWeixinCredentials({ account_id: wxAccountId.value.trim(), token: wxToken.value.trim(), base_url: wxBaseUrl.value.trim() || undefined })
+    await settingsStore.fetchSettings()
+    syncWeixinDraftsFromStore()
+    message.success('微信凭据已保存，Gateway 已重启')
+    void loadGateway()
+  } catch (err: any) {
+    message.error(err?.message || '保存失败')
+  } finally {
+    wxManualSaving.value = false
+  }
+}
+function goChannels() { router.push({ name: 'hermes.channels' }) }
+function goProfiles() { router.push({ name: 'hermes.profiles' }) }
+
 onMounted(() => {
   void loadSummary()
+  void loadGateway()
+  const p = settingsStore.fetchSettings().then(() => syncWeixinDraftsFromStore())
+  void p
 })
-
+onUnmounted(() => stopWeixinPoll())
 </script>
-
 <template>
   <div class="workbench-page">
     <div class="workbench-content">
@@ -175,7 +383,7 @@ onMounted(() => {
           </button>
           <p class="home-eyebrow">Workspace</p>
           <h1 class="home-title">{{ greeting }}<template v-if="username">{{ username }}</template></h1>
-          <p class="home-subtitle">在一处管理你的知识库、对话与记忆。</p>
+          <p class="home-subtitle">在一处管理你的知识库、对话与记忆。微信联动与 Gateway 控制已集成到本页。</p>
           <div class="home-stats" v-if="summary">
             <div class="home-stat">
               <span class="home-stat-value">{{ summary.knowledge.todayPapers ?? 0 }}</span>
@@ -189,6 +397,150 @@ onMounted(() => {
               <span class="home-stat-value">{{ summary.knowledge.awaitingReview ?? 0 }}</span>
               <span class="home-stat-label">待审核</span>
             </div>
+            <div class="home-stat">
+              <span class="home-stat-value">{{ gatewayRunning ? '运行中' : '已停止' }}</span>
+              <span class="home-stat-label">Gateway · {{ activeProfileName }}</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 微信联动 · Gateway 控制 -->
+        <section class="workbench-section gateway-weixin-section" aria-labelledby="gateway-weixin-title">
+          <div class="workbench-section-header">
+            <h3 id="gateway-weixin-title" class="workbench-section-title">微信联动 · Gateway 控制</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <NTag :type="gatewayRunning ? 'success' : 'error'" size="small" :bordered="false">{{ gatewayRunning ? 'Gateway 运行中' : 'Gateway 已停止' }}</NTag>
+              <NTag v-if="weixinConfigured" type="success" size="small" :bordered="false">微信已绑定</NTag>
+              <NTag v-else type="warning" size="small" :bordered="false">微信未绑定</NTag>
+            </div>
+          </div>
+          <p class="workbench-section-note" style="margin-bottom:12px">Hermes 通过 Gateway 进程与微信（Weixin）保持长连接。手机微信扫码后即可在微信里给 Hermes 发号施令；关闭 Gateway 将断开所有渠道。</p>
+
+          <div class="gw-wx-grid">
+            <!-- Gateway 卡 -->
+            <div class="gw-card">
+              <div class="gw-card-head">
+                <h4 class="gw-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7V5a5 5 0 0 1 10 0v2"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+                  Gateway 控制
+                </h4>
+                <NButton size="tiny" quaternary @click="loadGateway" :loading="gatewayLoading">刷新</NButton>
+              </div>
+
+              <div class="gw-status">
+                <span class="status-dot" :class="gatewayRunning ? 'running' : 'stopped'"></span>
+                <span class="gw-status-text">{{ gatewayRunning ? '运行中' : '已停止' }}</span>
+                <span class="gw-profile">profile: {{ gatewayTargetProfile }}</span>
+                <NTag v-if="gatewayUnified" size="tiny" type="info" :bordered="false" style="margin-left:6px">统一网关</NTag>
+              </div>
+              <div v-if="gatewayStatus?.pid" class="gw-meta">PID {{ gatewayStatus.pid }}<template v-if="gatewayStatus?.url"> · {{ gatewayStatus.url }}</template></div>
+              <div v-if="gatewayError" class="gw-error">{{ gatewayError }}</div>
+
+              <div class="gw-actions">
+                <NButton size="small" type="primary" :loading="gatewayAction==='start'" :disabled="gatewayRunning" @click="handleStartGateway">启动</NButton>
+                <NButton size="small" :loading="gatewayAction==='stop'" :disabled="!gatewayRunning" @click="handleStopGateway">停止</NButton>
+                <NButton size="small" :loading="gatewayAction==='restart'" @click="handleRestartGateway">重启</NButton>
+                <NButton size="small" quaternary @click="goProfiles">配置管理</NButton>
+              </div>
+
+              <div class="gw-divider"></div>
+
+              <div class="gw-row">
+                <span class="gw-row-label">自动启动</span>
+                <NSwitch :value="gatewayAutoEnabled" :loading="gatewayAutoSaving" @update:value="toggleGatewayAutoStart" />
+              </div>
+              <p class="gw-hint">开启后，Studio 启动时会自动拉起 Gateway；关闭则需手动启动。此项写入 Web UI 配置，不影响 Hermes 既有会话。</p>
+
+              <div class="gw-help">
+                <NCollapse>
+                  <NCollapseItem title="如何用命令行开启 / 关闭 Gateway？" name="cli">
+                    <div class="help-block">
+                      <p><code>hermes gateway start</code> —— 启动网关（或 <code>hermes gateway run</code> 前台运行）</p>
+                      <p><code>hermes gateway stop</code> —— 停止网关</p>
+                      <p><code>hermes gateway restart</code> —— 重启网关</p>
+                      <p><code>hermes gateway status</code> —— 查看状态</p>
+                      <p>指定配置：<code>HERMES_HOME=~/.hermes/profiles/&lt;name&gt; hermes gateway status</code> 或 <code>hermes --profile &lt;name&gt; gateway status</code></p>
+                      <p>关闭自启：设置环境变量 <code>HERMES_GATEWAY_AUTOSTART=0</code> 或在“模型与设置 → Gateway 自动启动”中关闭。</p>
+                      <p>日志：<code>~/.hermes/&lt;profile&gt;/logs/gateway.log</code> 或本页“本地服务”状态。</p>
+                    </div>
+                  </NCollapseItem>
+                </NCollapse>
+              </div>
+            </div>
+
+            <!-- Weixin 卡 -->
+            <div class="gw-card">
+              <div class="gw-card-head">
+                <h4 class="gw-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12a3 3 0 0 1 3-3h2a3 3 0 0 1 3 3v1a3 3 0 0 1-3 3h-.5L10 18l.5-2H11a3 3 0 0 1-3-3v-1z"/><path d="M16 8a3 3 0 0 1 3 3v1a2.5 2.5 0 0 1-2.5 2.5H16"/></svg>
+                  微信连接（Weixin）
+                </h4>
+                <NTag :type="weixinConfigured ? 'success' : 'warning'" size="small" :bordered="false">{{ weixinConfigured ? '已配置' : '未配置' }}</NTag>
+              </div>
+
+              <p class="gw-hint" style="margin-top:0">扫码绑定后，Hermes 会通过 iLink 网关在微信中响应你。同一时间同一微信账号只能被一个 profile 独占。</p>
+
+              <div class="wx-qr-area">
+                <div class="wx-qr-actions">
+                  <NButton type="primary" size="small" :loading="wxQrStatus==='loading'" @click="startWeixinQrLogin">{{ wxQrStatus==='confirmed' ? '重新扫码' : '扫码登录微信' }}</NButton>
+                  <NButton size="small" quaternary @click="goChannels">前往频道设置</NButton>
+                  <span v-if="wxQrStatus==='waiting'" class="wx-hint">等待扫码…</span>
+                  <span v-else-if="wxQrStatus==='scaned'" class="wx-hint scaned">已扫码，请在手机上确认</span>
+                  <span v-else-if="wxQrStatus==='confirmed'" class="wx-hint success">✓ 已确认并绑定</span>
+                  <span v-else-if="wxQrStatus==='expired'" class="wx-hint error">二维码已过期</span>
+                  <span v-else-if="wxQrStatus==='error'" class="wx-hint error">获取失败</span>
+                </div>
+                <div v-if="wxQrUrl" class="wx-qr-preview">
+                  <a :href="wxQrUrl" target="_blank" rel="noopener">
+                    <img :src="wxQrUrl" alt="微信扫码二维码" class="wx-qr-img" />
+                  </a>
+                  <p class="wx-qr-tip">若二维码未自动弹出，请 <a :href="wxQrUrl" target="_blank">点此在新窗口打开</a> 后用手机微信扫码。</p>
+                </div>
+              </div>
+
+              <div class="gw-divider"></div>
+
+              <div class="wx-manual">
+                <div class="wx-field">
+                  <label class="wx-label">Token</label>
+                  <NInput v-model:value="wxToken" size="small" placeholder="WEIXIN_TOKEN" clearable />
+                </div>
+                <div class="wx-field">
+                  <label class="wx-label">Account ID</label>
+                  <NInput v-model:value="wxAccountId" size="small" placeholder="WEIXIN_ACCOUNT_ID" clearable />
+                </div>
+                <div class="wx-field">
+                  <label class="wx-label">Base URL <span class="muted">（可选）</span></label>
+                  <NInput v-model:value="wxBaseUrl" size="small" placeholder="https://..." clearable />
+                </div>
+                <div class="wx-field-actions">
+                  <NButton type="primary" size="small" :loading="wxManualSaving" @click="handleSaveWeixinManual">保存并重启 Gateway</NButton>
+                  <span class="gw-hint" style="margin:0">保存后会自动重启 Gateway 使微信配置生效。</span>
+                </div>
+                <p v-if="weixinTokenDisplay || weixinAccountDisplay" class="wx-current">当前：Token {{ weixinTokenDisplay ? '••••' + weixinTokenDisplay.slice(-4) : '未设置' }} · Account {{ weixinAccountDisplay || '未设置' }}</p>
+              </div>
+
+              <div class="gw-help">
+                <NCollapse>
+                  <NCollapseItem title="微信绑定常见问题" name="faq">
+                    <div class="help-block">
+                      <p><b>扫码后无响应？</b> 请确认 Gateway 处于运行中，且微信未被其他 profile 占用（独占 token 锁）。</p>
+                      <p><b>换绑？</b> 重新扫码或手动更新 Token/Account ID 后重启 Gateway。</p>
+                      <p><b>解绑？</b> 在“频道”中清空 weixin 的 Token 并保存，或删除环境变量后重启 Gateway。</p>
+                    </div>
+                  </NCollapseItem>
+                </NCollapse>
+              </div>
+            </div>
+          </div>
+
+          <div class="gw-steps">
+            <h5 class="gw-steps-title">快速上手（3 步）</h5>
+            <ol class="gw-steps-list">
+              <li><b>启动 Gateway</b>：确保上侧 Gateway 显示为“运行中”（若未运行，点“启动”）。</li>
+              <li><b>绑定微信</b>：点“扫码登录微信”，用手机微信扫码并在手机上确认。</li>
+              <li><b>在微信中说话</b>：对已绑定的微信账号发送消息，Hermes 将通过 Gateway 回复；可在“频道”中配置白名单与回复策略。</li>
+            </ol>
           </div>
         </section>
 
@@ -204,7 +556,7 @@ onMounted(() => {
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
               </svg>
               <svg v-else-if="card.icon === 'chat'" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <path d="M21 11.5a8.5 8.5 0 0 1-12.06 7.72L4 20l.78-4.94A8.5 8.5 0 1 1 21 11.5z" />
               </svg>
               <svg v-else-if="card.icon === 'memory'" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" />
@@ -267,7 +619,6 @@ onMounted(() => {
     </div>
   </div>
 </template>
-
 <style scoped lang="scss">
 @use '@/styles/workbench';
 @use '@/styles/variables' as *;
@@ -275,5 +626,82 @@ onMounted(() => {
 .feature-body {
   min-width: 0;
 }
-
+.gateway-weixin-section {
+  margin-bottom: 28px;
+  padding: 18px;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  background: $bg-card;
+}
+.gw-wx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 960px) {
+  .gw-wx-grid { grid-template-columns: 1fr; }
+}
+.gw-card {
+  padding: 14px;
+  border: 1px solid $border-light;
+  border-radius: 10px;
+  background: $bg-card;
+}
+.gw-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.gw-card-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+}
+.gw-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: $text-primary;
+}
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  &.running { background: var(--success); box-shadow: 0 0 0 4px rgba(var(--success-rgb),0.18); }
+  &.stopped { background: var(--error); box-shadow: 0 0 0 4px rgba(var(--error-rgb),0.12); }
+}
+.gw-status-text { font-weight: 600; }
+.gw-profile { color: $text-muted; font-size: 12px; font-family: $font-code; }
+.gw-meta { margin-top: 6px; font-size: 12px; color: $text-muted; font-family: $font-code; word-break: break-all; }
+.gw-error { margin-top: 8px; color: var(--error); font-size: 12px; }
+.gw-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.gw-divider { height: 1px; background: $border-light; margin: 14px 0; }
+.gw-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gw-row-label { font-size: 13px; color: $text-primary; font-weight: 500; }
+.gw-hint { color: $text-muted; font-size: 12px; line-height: 1.5; margin: 6px 0 0; }
+.gw-help { margin-top: 10px; }
+.help-block { font-size: 12px; line-height: 1.6; color: $text-secondary; }
+.help-block p { margin: 4px 0; }
+.help-block code { background: var(--code-bg); padding: 1px 4px; border-radius: 4px; font-family: $font-code; font-size: 11px; }
+.wx-qr-area { margin-top: 8px; }
+.wx-qr-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wx-hint { font-size: 12px; color: $text-secondary; &.scaned{ color: var(--warning); } &.success{ color: var(--success); font-weight:600; } &.error{ color: var(--error); } }
+.wx-qr-preview { margin-top: 10px; }
+.wx-qr-img { width: 160px; height: 160px; object-fit: contain; border: 1px solid $border-color; border-radius: 8px; background: #fff; }
+.wx-qr-tip { font-size: 12px; color: $text-muted; margin-top: 6px; }
+.wx-qr-tip a { color: var(--brand); }
+.wx-manual { display: flex; flex-direction: column; gap: 10px; }
+.wx-field { display: flex; flex-direction: column; gap: 4px; }
+.wx-label { font-size: 12px; color: $text-secondary; font-weight: 500; .muted{ font-weight:400; color:$text-muted; } }
+.wx-field-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wx-current { font-size: 12px; color: $text-muted; font-family: $font-code; margin: 0; }
+.gw-steps { margin-top: 16px; padding: 12px; border: 1px dashed $border-color; border-radius: 8px; background: var(--bg-secondary); }
+.gw-steps-title { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: $text-primary; }
+.gw-steps-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.7; color: $text-secondary; }
+.gw-steps-list b { color: $text-primary; }
 </style>

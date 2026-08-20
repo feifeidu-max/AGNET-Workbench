@@ -95,6 +95,22 @@ export async function deleteProfileAvatar(name: string): Promise<void> {
   await request(`/api/hermes/profiles/${encodeURIComponent(name)}/avatar`, { method: 'DELETE' })
 }
 
+export async function startProfileGateway(name: string): Promise<ProfileRuntimeStatus['gateway']> {
+  const res = await request<{ success: boolean; gateway: ProfileRuntimeStatus['gateway'] }>(
+    `/api/hermes/profiles/${encodeURIComponent(name)}/gateway/start`,
+    { method: 'POST' },
+  )
+  return res.gateway
+}
+
+export async function stopProfileGateway(name: string): Promise<ProfileRuntimeStatus['gateway']> {
+  const res = await request<{ success: boolean; gateway: ProfileRuntimeStatus['gateway'] }>(
+    `/api/hermes/profiles/${encodeURIComponent(name)}/gateway/stop`,
+    { method: 'POST' },
+  )
+  return res.gateway
+}
+
 export async function restartProfileGateway(name: string): Promise<ProfileRuntimeStatus['gateway']> {
   const res = await request<{ success: boolean; gateway: ProfileRuntimeStatus['gateway'] }>(
     `/api/hermes/profiles/${encodeURIComponent(name)}/gateway/restart`,

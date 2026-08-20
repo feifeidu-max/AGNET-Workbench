@@ -642,6 +642,45 @@ export async function getGatewayRuntimeStatusForProfile(profile: string): Promis
   }
 }
 
+export async function startGatewayRuntimeForProfile(profile: string): Promise<{
+  running: boolean
+  profile: string
+  targetProfile?: string
+  unified?: boolean
+}> {
+  const hermesBin = resolveHermesBin()
+  const { gatewayAutoStart } = await readAppConfig()
+  const target = resolveGatewayTargetProfile(profile, shouldUseUnifiedGatewayManagement(gatewayAutoStart))
+  const profileDir = getProfileDir(target.targetProfile)
+  // 已在运行则直接返回
+  const alreadyRunning = await isGatewayRunningForProfile(hermesBin, profileDir)
+  if (alreadyRunning) {
+    return { running: true, profile: target.requestedProfile, targetProfile: target.targetProfile, unified: target.unified }
+  }
+  await startGatewayForProfile(hermesBin, target.targetProfile, profileDir, { managedRun: shouldUseManagedGatewayRun() })
+  const running = await waitForGatewayRunning(hermesBin, target.targetProfile, profileDir)
+  if (!running) throw new Error('Hermes gateway start completed but gateway did not report running within timeout')
+  return { running, profile: target.requestedProfile, targetProfile: target.targetProfile, unified: target.unified }
+}
+
+export async function stopGatewayRuntimeForProfile(profile: string): Promise<{
+  running: boolean
+  profile: string
+  targetProfile?: string
+  unified?: boolean
+}> {
+  const hermesBin = resolveHermesBin()
+  const { gatewayAutoStart } = await readAppConfig()
+  const target = resolveGatewayTargetProfile(profile, shouldUseUnifiedGatewayManagement(gatewayAutoStart))
+  const profileDir = getProfileDir(target.targetProfile)
+  await stopGatewayForProfile(hermesBin, target.targetProfile, profileDir, { retireManaged: true })
+  // 等待锁释放并确认已停止
+  await new Promise(resolve => setTimeout(resolve, 800))
+  const running = await isGatewayRunningForProfile(hermesBin, profileDir)
+  if (running) throw new Error('Hermes gateway stop completed but gateway still reports running')
+  return { running: false, profile: target.requestedProfile, targetProfile: target.targetProfile, unified: target.unified }
+}
+
 export async function restartGatewayForProfile(profile: string): Promise<{
   running: boolean
   profile: string
@@ -723,3 +762,4 @@ export async function ensureProfileGatewaysRunning(): Promise<void> {
     }
   }
 }
+
