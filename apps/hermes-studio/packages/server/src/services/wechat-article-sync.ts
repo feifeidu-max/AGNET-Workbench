@@ -578,10 +578,12 @@ export async function importWechatArticleLink(
   const html = await fetchHtml(candidate.url)
   const article = extractArticle(candidate.url, html)
   if (!article) throw new Error('未提取到足够长的文章正文，可能是验证页或内容过短')
-  if (article.score < 0.42) throw new Error(`数据技术相关度不足（评分 ${article.score.toFixed(2)}），不满足准入门槛`)
   if (state.seen.some((seen) => seen.url === article.url || seen.contentHash === article.hash)) {
     throw new Error('该文章已导入过（URL 或内容去重命中）')
   }
+  // Single-link import is intentionally open: every successfully extracted
+  // article enters the strict draft gate and the reviewer decides. Keep the
+  // score only for provenance / sorting, never as a hard rejection.
   await createDraft(article, source)
   state.seen.push({ url: article.url, contentHash: article.hash, title: article.title, importedAt: new Date().toISOString() })
   state.seen = state.seen.slice(-500)
