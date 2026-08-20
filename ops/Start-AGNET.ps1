@@ -215,6 +215,35 @@ try {
         throw "The current LLM Wiki project is not listed in WikiProjectPaths and would not be backed up: $currentWikiPath"
     }
 
+    # Self-heal: interrupted writes can leave 0-byte JSON state files that make every /sources call 500
+    # (breaks Studio tab=wiki because loadFiles() loads sources together with wiki files).
+    foreach ($healRel in @('.llm-wiki/trusted-sources.json', '.llm-wiki/reading-candidates.json', '.llm-wiki/file-change-queue.json')) {
+        foreach ($base in @($configuredWikiPaths)) {
+            if (-not $base) { continue }
+            $sf = Join-Path $base $healRel
+            if (Test-Path -LiteralPath $sf -PathType Leaf) {
+                try {
+                    if ((Get-Item -LiteralPath $sf -Force).Length -eq 0) {
+                        [System.IO.File]::WriteAllText($sf, '[]', [System.Text.UTF8Encoding]::new($false))
+                        Write-Host "  [heal] repaired empty $sf -> []"
+                    }
+                } catch { Write-Host "  [warn] failed to repair $sf" -ForegroundColor Yellow }
+            }
+        }
+    }
+    foreach ($base in @($configuredWikiPaths)) {
+        if (-not $base) { continue }
+        $sf = Join-Path $base '.llm-wiki/file-snapshot.json'
+        if (Test-Path -LiteralPath $sf -PathType Leaf) {
+            try {
+                if ((Get-Item -LiteralPath $sf -Force).Length -eq 0) {
+                    [System.IO.File]::WriteAllText($sf, '{}', [System.Text.UTF8Encoding]::new($false))
+                    Write-Host "  [heal] repaired empty $sf -> {}"
+                }
+            } catch { Write-Host "  [warn] failed to repair $sf" -ForegroundColor Yellow }
+        }
+    }
+
     Write-Host "[3/3] Starting Hermes Studio on loopback..."
     $studioHealthUri = "http://127.0.0.1:$studioPort/health"
     $studioHealth = Get-OptionalHealth -Uri $studioHealthUri

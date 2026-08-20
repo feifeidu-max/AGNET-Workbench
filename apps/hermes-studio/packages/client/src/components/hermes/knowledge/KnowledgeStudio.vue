@@ -319,16 +319,23 @@ async function loadWorkspace() {
 async function loadFiles() {
   filesLoading.value = true
   try {
-    const [wiki, sources, trusted] = await Promise.all([
+    const [wikiRes, sourcesRes, trustedRes] = await Promise.allSettled([
       listKnowledgeFiles('wiki'),
       listKnowledgeFiles('sources'),
       listTrustedKnowledgeSources(),
     ])
-    wikiFiles.value = wiki
-    sourceFiles.value = sources
-    trustedSources.value = trusted
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '无法读取 Wiki 文件')
+    wikiFiles.value = wikiRes.status === 'fulfilled' ? wikiRes.value : []
+    sourceFiles.value = sourcesRes.status === 'fulfilled' ? sourcesRes.value : []
+    trustedSources.value = trustedRes.status === 'fulfilled' ? trustedRes.value : []
+    const firstError = [wikiRes, sourcesRes, trustedRes].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
+    if (firstError) {
+      const reason = firstError.reason
+      const detail = reason instanceof Error ? reason.message : String(reason ?? '未知错误')
+      // Wiki tree is critical; trusted sources are best-effort. Keep the page
+      // usable even when the sources index is temporarily unavailable.
+      if (wikiRes.status === 'rejected') message.error(detail || '无法读取 Wiki 文件')
+      else message.warning('可信来源清单暂时不可用，已展示 Wiki 文件')
+    }
   } finally {
     filesLoading.value = false
   }

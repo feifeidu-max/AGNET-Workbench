@@ -327,6 +327,9 @@ where
     }
     let raw =
         fs::read(path).map_err(|e| GateError::internal(format!("Failed to read state: {e}")))?;
+    if raw.is_empty() || raw.iter().all(|b| b.is_ascii_whitespace()) {
+        return Ok(T::default());
+    }
     serde_json::from_slice(&raw)
         .map_err(|e| GateError::internal(format!("Invalid state file '{}': {e}", path.display())))
 }
