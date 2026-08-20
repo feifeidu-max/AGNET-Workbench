@@ -275,6 +275,45 @@ try {
         throw "Hermes 对话模型的 API Key 未配置：用户环境变量 '$($hermesModel.KeyEnv)' 未设置。请先设置该环境变量（模型 key 只放环境变量，不写入仓库），然后重新启动；否则 Hermes 对话按钮无法使用。"
     }
 
+    # ── 知识面就绪探针（Studio → LLM Wiki BFF）─────────────────────────────
+    # 即便 /health 正常，知识库平面（projects/files/ingest-drafts）仍可能在
+    # 冷启动后出现瞬时 500。探针带重试与脱敏诊断，避免把偶发 500 误判为
+    # 永久故障；失败时给出可操作的排障提示。
+    Write-Host "  Verifying knowledge plane via Studio BFF..."
+    $knowledgeProbeOk = $false
+    $knowledgeProbeDetail = ""
+    $knowledgeDeadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $knowledgeDeadline) {
+        try {
+            $kp = Invoke-RestMethod -Uri "http://127.0.0.1:$studioPort/api/knowledge/summary" -Method Get -TimeoutSec 8 -UseBasicParsing
+            if ($null -ne $kp -and $kp.serviceOk -eq $true) {
+                $knowledgeProbeOk = $true
+                $knowledgeProbeDetail = "trusted=$($kp.trusted) sources=$($kp.sources) drafts=$($kp.drafts)"
+                break
+            }
+            $knowledgeProbeDetail = if ($null -ne $kp) { "serviceOk=$($kp.serviceOk) errors=$($kp.errors -join '; ')" } else { "empty response" }
+        } catch {
+            $knowledgeProbeDetail = $_.Exception.Message
+            # BFF 会把上游 5xx 脱敏为 "LLM Wiki service request failed (5xx): <hint>"，保留该 hint 供排障。
+            try {
+                $resp = $_.Exception.Response
+                if ($null -ne $resp) {
+                    $reader = [System.IO.StreamReader]::new($resp.GetResponseStream())
+                    $body = $reader.ReadToEnd()
+                    if (-not [string]::IsNullOrWhiteSpace($body)) { $knowledgeProbeDetail = $body.Substring(0, [Math]::Min(600, $body.Length)) }
+                }
+            } catch { }
+        }
+        Start-Sleep -Seconds 2
+    }
+    if (-not $knowledgeProbeOk) {
+        # 非致命告警：不阻断启动，但给出明确指引，避免下一次点击即 500 却无处查因。
+        Write-Host "  [WARN] 知识面探针未通过（30s）：$knowledgeProbeDetail" -ForegroundColor Yellow
+        Write-Host "         排查：1) 确认 LLM Wiki 进程仍在 127.0.0.1:$wikiPort 监听；2) 浏览器 DevTools 查看 /api/knowledge/* 的真实响应；3) 查看 $managedWikiProjectsRoot 及 C:\AGNET-Workspace\LLM-Wiki\.llm-wiki\staging 状态。" -ForegroundColor Yellow
+    } else {
+        Write-Host "  [OK] 知识面探针通过：$knowledgeProbeDetail"
+    }
+
     # ── LLM Wiki 问答模型检查（可选，仅影响 Wiki 对话/深度研究）─────────────
     $wikiLlmConfigured = (Test-AGNETEnvVariableSet -Name "LLM_WIKI_LLM_PROVIDER") -and
         (Test-AGNETEnvVariableSet -Name "LLM_WIKI_LLM_CUSTOM_ENDPOINT") -and
@@ -292,6 +331,11 @@ try {
     Write-Host "  [OK] 对话模型           provider=$($hermesModel.Provider) model=$($hermesModel.Model) key=$($hermesModel.KeyEnv)"
     Write-Host "  [OK] LLM Wiki           127.0.0.1:$wikiPort (retrievalMode=$($wikiHealth.retrievalMode), 当前项目已注册备份)"
     Write-Host "  [OK] LLM Wiki Token     $tokenVariable 已配置"
+    if ($knowledgeProbeOk) {
+        Write-Host "  [OK] 知识面探针         $knowledgeProbeDetail"
+    } else {
+        Write-Host "  [!!] 知识面探针        未通过（见上方 WARN，服务仍可用但建议排查）"
+    }
     if ($wikiLlmConfigured) {
         Write-Host "  [OK] Wiki 问答模型       LLM_WIKI_LLM_* 已配置"
     } else {

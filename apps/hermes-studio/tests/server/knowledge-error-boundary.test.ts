@@ -23,12 +23,17 @@ describe('knowledge BFF error boundary', () => {
     expect(unix).not.toContain('/home/alice')
   })
 
-  it('uses a fixed message for upstream server failures', () => {
-    expect(publicErrorMessage(new LlmWikiApiError(
+  it('uses a redacted but diagnostic message for upstream server failures', () => {
+    const message = publicErrorMessage(new LlmWikiApiError(
       'Failed in D:\\private\\staging with upstream diagnostics',
       500,
       { internalPath: 'D:\\private\\staging' },
-    ))).toBe('LLM Wiki service request failed')
+    ))
+    // 5xx must stay redacted (no local paths) yet preserve a status-qualified
+    // diagnostic so operators see the real cause behind the 500.
+    expect(message).toMatch(/^LLM Wiki service request failed \(500\): /)
+    expect(message).toContain('[local path omitted]')
+    expect(message).not.toContain('D:\\private\\staging')
   })
 
   it('redacts paths from summary-level upstream errors too', () => {

@@ -23,7 +23,15 @@ function redactLocalPaths(message: string): string {
 /** Keep upstream diagnostics useful without exposing local filesystem paths. */
 export function publicKnowledgeErrorMessage(error: unknown): string {
   if (error instanceof LlmWikiApiError) {
-    if (error.status >= 500) return 'LLM Wiki service request failed'
+    if (error.status >= 500) {
+      // Preserve a redacted upstream hint so operators can diagnose the
+      // real cause instead of seeing a single opaque "service request failed".
+      const detail = redactLocalPaths(error.message).trim().slice(0, 400)
+      if (detail && detail !== 'LLM Wiki service request failed') {
+        return `LLM Wiki service request failed (${error.status}): ${detail}`
+      }
+      return `LLM Wiki service request failed (${error.status})`
+    }
     return redactLocalPaths(error.message)
   }
   return redactLocalPaths(error instanceof Error ? error.message : String(error))
