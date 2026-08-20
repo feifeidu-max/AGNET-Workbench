@@ -529,18 +529,37 @@ onUnmounted(() => stopWeixinPoll())
                       <p><b>解绑？</b> 在“频道”中清空 weixin 的 Token 并保存，或删除环境变量后重启 Gateway。</p>
                     </div>
                   </NCollapseItem>
+                  <NCollapseItem title="微信控制知识库 · 免 LLM Wiki 手动导入" name="kb">
+                    <div class="help-block">
+                      <p><b>导入公众号文章：</b> 在微信里发送 <code>https://mp.weixin.qq.com/s/... 帮我导入</code>，Hermes 会自动抓取正文（双 UA + 12 MB 上限 + 去重）并创建草稿 <code>draftId</code>；回复 <code>批准 / 直接入库</code> 即可写入 <code>wiki/sources/*.md</code>，无需打开 LLM Wiki。</p>
+                      <p><b>关键词检索：</b> 发送 <code>知识库里关于 数据湖 的文章有哪些？</code> 或 <code>帮我总结 湖仓 相关论文</code>，Hermes 会调用 <code>GET /api/knowledge/search</code> / <code>POST /api/knowledge/chat</code> 并带标题/路径/摘要引用回答。</p>
+                      <p><b>管理：</b> <code>列一下待审核草稿</code> / <code>知识库概览</code> / <code>删除 wiki/sources/xxx.md</code> 均可通过语言直接完成。</p>
+                      <p style="color:var(--warning);">提示：导入后需“批准”才会变为可信知识并被检索/图谱收录；限流 6 次/分，重复链接会提示“已导入过”。</p>
+                    </div>
+                  </NCollapseItem>
                 </NCollapse>
               </div>
             </div>
           </div>
 
           <div class="gw-steps">
-            <h5 class="gw-steps-title">快速上手（3 步）</h5>
+            <h5 class="gw-steps-title">快速上手（4 步）</h5>
             <ol class="gw-steps-list">
-              <li><b>启动 Gateway</b>：确保上侧 Gateway 显示为“运行中”（若未运行，点“启动”）。</li>
-              <li><b>绑定微信</b>：点“扫码登录微信”，用手机微信扫码并在手机上确认。</li>
+              <li><b>启动 Gateway</b>：确保上侧 Gateway 显示为“运行中”（若未运行，点“启动”；需关闭时点“停止”。<code>自动启动</code> 开启后 Studio 启动时自动拉起）。</li>
+              <li><b>绑定微信</b>：点“扫码登录微信”，用手机微信扫码并在手机上确认；也可在下方手动粘贴 Token/AccountID 保存并自动重启 Gateway。</li>
               <li><b>在微信中说话</b>：对已绑定的微信账号发送消息，Hermes 将通过 Gateway 回复；可在“频道”中配置白名单与回复策略。</li>
+              <li><b>用微信控制知识库（免手动导入）</b>：在微信里直接发 <code>https://mp.weixin.qq.com/s/...</code> 链接并说“帮我导入”，Hermes 会自动抓取并创建草稿；回复“批准/直接入库”即可无需打开 LLM Wiki 完成入库。发关键词如“知识库里关于 数据治理 的文章有哪些？”即可让 Hermes 检索并引用已入库论文/文章。</li>
             </ol>
+          </div>
+          <div class="gw-steps" style="margin-top:12px; background: var(--bg-secondary); border-style: dashed;">
+            <h5 class="gw-steps-title">微信控制知识库 · 常用语句（已全量接入 Hermes）</h5>
+            <div class="help-block">
+              <p><code>https://mp.weixin.qq.com/s/xxx 帮我收录</code> —— 单链导入（SSRF 白名单仅 mp.weixin.qq.com/s、6 次/分限流、内容哈希去重），返回草稿ID与标题。</p>
+              <p><code>批准 / 直接入库 / 帮我批准 abcd1234</code> —— 批准草稿，写入 <code>wiki/sources/*.md</code> 后即可被关键词检索与知识图谱收录，无需进入 LLM Wiki。</p>
+              <p><code>知识库里有没有关于 数据湖 的论文？</code> —— Hermes 会调用 <code>GET /api/knowledge/search</code> 或 <code>POST /api/knowledge/chat</code> 并带引用回答（local_first，本地检索不外发）。</p>
+              <p><code>列一下待审核草稿 / 知识库概览</code> —— Hermes 会查 <code>GET /api/knowledge/drafts</code> / <code>GET /api/knowledge/summary</code>。</p>
+              <p><b>如何开启/关闭 Gateway：</b>本页 Gateway 卡点“启动 / 停止 / 重启”按钮；或命令行 <code>hermes gateway start</code> / <code>hermes gateway stop</code> / <code>hermes gateway restart</code> / <code>hermes gateway status</code>；指定 profile 用 <code>hermes --profile &lt;name&gt; gateway status</code>；关闭自启可设环境变量 <code>HERMES_GATEWAY_AUTOSTART=0</code> 或关闭本页自动启动开关。</p>
+            </div>
           </div>
         </section>
 
@@ -705,3 +724,5 @@ onUnmounted(() => stopWeixinPoll())
 .gw-steps-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.7; color: $text-secondary; }
 .gw-steps-list b { color: $text-primary; }
 </style>
+
+
