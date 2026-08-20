@@ -6,6 +6,7 @@ import { getHermesGatewayHealth, getModelHealth } from '../services/model-health
 import {
   addWechatSource,
   importDiscoveredWechatArticles,
+  importWechatArticleLink,
   listWechatSources,
   removeWechatSource,
   syncWechatSources,
@@ -13,6 +14,45 @@ import {
 import { recordWechatDiscoveryRun } from '../services/wechat-article-discovery-job'
 
 export const workbenchRoutes = new Router()
+
+// Single-link WeChat import: paste one mp.weixin.qq.com/s/... URL and
+// create a strict draft behind the same generated-drafts gate as PDF import.
+// Rate-limited and SSRF-guarded (normalizeUrl + mp.weixin.qq.com/s allowlist),
+// deduplicated via state.seen, and gated by the same score threshold.
+const WECHAT_LINK_RATE = new Map<string, number[]>()
+function allowWechatLink(ip: string): boolean {
+  const now = Date.now()
+  const windowMs = 60_000
+  const maxInWindow = 6
+  let hits = WECHAT_LINK_RATE.get(ip) ?? []
+  hits = hits.filter((t) => now - t < windowMs)
+  if (hits.length >= maxInWindow) return false
+  hits.push(now)
+  WECHAT_LINK_RATE.set(ip, hits)
+  return true
+}
+workbenchRoutes.post('/api/workbench/wechat-import', async (ctx: Context) => {
+  const ip = (ctx.ip || (ctx.request as { ip?: string }).ip || 'unknown').toString()
+  if (!allowWechatLink(ip)) {
+    ctx.status = 429
+    ctx.body = { error: '操作过于频繁，请稍后再试' }
+    return
+  }
+  try {
+    const body = (ctx.request as { body?: unknown }).body as Record<string, unknown> | undefined
+    const rawUrl = typeof body?.url === 'string' ? body.url : typeof body?.link === 'string' ? body.link : ''
+    const sourceName = typeof body?.sourceName === 'string' ? body.sourceName : undefined
+    const result = await importWechatArticleLink(rawUrl, sourceName)
+    ctx.status = 201
+    ctx.body = { draftId: result.draftId, title: result.title, url: result.url }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const isBadRequest =
+      /仅支持|请输入合法|未提取到|相关度不足|已导入过|验证页/.test(message)
+    ctx.status = isBadRequest ? 400 : 502
+    ctx.body = { error: message }
+  }
+})
 
 workbenchRoutes.get('/api/workbench/summary', async (ctx: Context) => {
   const knowledge = await knowledgeSummary()

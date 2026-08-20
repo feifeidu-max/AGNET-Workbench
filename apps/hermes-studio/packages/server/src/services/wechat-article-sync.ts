@@ -559,6 +559,51 @@ function normalizeDiscoveredArticle(value: unknown): DiscoveredWechatArticle | n
 }
 
 /**
+ * Single-link import: paste one WeChat article URL and follow the exact
+ * same strict draft gate as a PDF import. Must not bypass the
+ * WechatSource/score/duplicate/beauty checks — just a lighter entry point.
+ */
+export async function importWechatArticleLink(
+  rawUrl: unknown,
+  rawSourceName?: unknown,
+): Promise<{ draftId: string; title: string; url: string }> {
+  const normalized = normalizeUrl(typeof rawUrl === 'string' ? rawUrl.trim() : '')
+  if (!normalized) throw new Error('请输入合法的文章链接')
+  const candidate = normalizeDiscoveredArticle({ url: normalized, sourceName: typeof rawSourceName === 'string' ? rawSourceName : undefined })
+  if (!candidate) throw new Error('仅支持 mp.weixin.qq.com/s/ 的公众号文章链接')
+  // Reuse the shared extraction/score/hash pipeline — do not create a
+  // parallel "light" path that skips quality gating.
+  const state = loadState()
+  const source = discoverySource(candidate, candidate.url)
+  const html = await fetchHtml(candidate.url)
+  const article = extractArticle(candidate.url, html)
+  if (!article) throw new Error('未提取到足够长的文章正文，可能是验证页或内容过短')
+  if (article.score < 0.42) throw new Error(`数据技术相关度不足（评分 ${article.score.toFixed(2)}），不满足准入门槛`)
+  if (state.seen.some((seen) => seen.url === article.url || seen.contentHash === article.hash)) {
+    throw new Error('该文章已导入过（URL 或内容去重命中）')
+  }
+  await createDraft(article, source)
+  state.seen.push({ url: article.url, contentHash: article.hash, title: article.title, importedAt: new Date().toISOString() })
+  state.seen = state.seen.slice(-500)
+  persistState(state)
+  // The strict gate generates its own draft id; recover by matching hash.
+  // Keep it simple: re-read the draft list and pick the freshly created one
+  // by content hash (sha256 of title+content is baked into draft.sha256).
+  // Fall back to title match if list is unavailable.
+  try {
+    const payload = await llmWikiJson<{ drafts: Array<Record<string, unknown>> }>('/projects/current/ingest-drafts')
+    const drafts = Array.isArray(payload.drafts) ? payload.drafts : []
+    const match =
+      drafts.find((d) => String(d.sha256 ?? '') === article.hash) ??
+      drafts.find((d) => String(d.paperTitle ?? d.title ?? '') === article.title)
+    if (match && typeof match.id === 'string') {
+      return { draftId: match.id, title: article.title, url: article.url }
+    }
+  } catch { /* draft was still created; caller only needs confirmation */ }
+  return { draftId: article.hash.slice(0, 16), title: article.title, url: article.url }
+}
+
+/**
  * Import URLs found by Hermes' web-search cron task into the strict LLM Wiki
  * draft queue. The server fetches and scores the article itself; Hermes only
  * supplies candidate links and never supplies page content to be trusted.

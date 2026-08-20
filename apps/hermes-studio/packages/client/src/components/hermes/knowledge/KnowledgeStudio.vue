@@ -21,6 +21,7 @@ import {
   fetchKnowledgeDraftDetail,
   fetchKnowledgeGraph,
   fetchKnowledgeWorkspace,
+  importWechatLink,
   listKnowledgeDrafts,
   rejectKnowledgeDraft,
   reviseKnowledgeDraft,
@@ -154,6 +155,8 @@ const draftsLoading = ref(false)
 const uploading = ref(false)
 const uploadProgress = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
+const wechatLink = ref('')
+const wechatImporting = ref(false)
 const draftDetailOpen = ref(false)
 const draftDetail = ref<KnowledgeDraftDetail | null>(null)
 const draftDetailLoading = ref(false)
@@ -489,6 +492,34 @@ async function loadDrafts() {
 
 function openFilePicker() {
   fileInput.value?.click()
+}
+
+async function importWechatUrl() {
+  const raw = wechatLink.value.trim()
+  if (!raw || wechatImporting.value) return
+  // Guard the allowlist on the client too so the error is instant and
+  // does not depend on a round-trip. Server remains the authority.
+  try {
+    const parsed = new URL(raw)
+    if (parsed.hostname.toLowerCase() !== 'mp.weixin.qq.com' || !/^\/s(?:\/|$)/i.test(parsed.pathname)) {
+      message.error('仅支持 mp.weixin.qq.com/s/ 的公众号文章链接')
+      return
+    }
+  } catch {
+    message.error('请输入合法的文章链接')
+    return
+  }
+  wechatImporting.value = true
+  try {
+    const result = await importWechatLink(raw)
+    message.success(`已提交「${result.title}」进入审核队列`)
+    wechatLink.value = ''
+    await loadDrafts()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '公众号文章导入失败')
+  } finally {
+    wechatImporting.value = false
+  }
 }
 
 async function uploadPdfs(event: Event) {
@@ -980,7 +1011,8 @@ onMounted(async () => {
 
         <section v-else-if="activeView === 'review'" class="knowledge-view">
           <div class="section-heading"><div><h3>知识归纳与审核</h3><p>论文和优质技术文章都先在此处审核；审核前不可检索、不可引用。</p></div><NButton size="small" :loading="draftsLoading" @click="loadDrafts">刷新</NButton></div>
-          <section class="upload-strip"><div><strong>导入论文或技术文章 PDF</strong><span>{{ uploadProgress || '公众号文章可在浏览器中打印为 PDF 后导入；所有材料都会先进入暂存和审核队列。' }}</span></div><input ref="fileInput" class="visually-hidden" type="file" accept="application/pdf,.pdf" multiple @change="uploadPdfs" /><NButton type="primary" :loading="uploading" @click="openFilePicker">选择 PDF</NButton></section>
+          <section class="upload-strip"><div><strong>导入论文或技术文章 PDF</strong><span>{{ uploadProgress || '所有材料都会先进入暂存和审核队列，审核通过后才进入正式知识库。' }}</span></div><input ref="fileInput" class="visually-hidden" type="file" accept="application/pdf,.pdf" multiple @change="uploadPdfs" /><NButton type="primary" :loading="uploading" @click="openFilePicker">选择 PDF</NButton></section>
+          <section class="upload-strip"><div><strong>导入公众号文章</strong><span>粘贴 mp.weixin.qq.com/s/ 链接，将按与 PDF 相同的审核流程进入草稿队列。</span></div><NInput v-model:value="wechatLink" size="small" placeholder="https://mp.weixin.qq.com/s/..." clearable :disabled="wechatImporting" @keyup.enter="importWechatUrl" style="max-width: 520px" /><NButton type="primary" secondary :loading="wechatImporting" :disabled="!wechatLink.trim()" @click="importWechatUrl">导入链接</NButton></section>
           <div class="subsection-heading"><h4>严格草稿队列</h4><span>{{ drafts.length }} 项</span></div>
           <NSpin :show="draftsLoading"><div v-if="drafts.length" class="draft-list"><article v-for="draft in drafts" :key="draft.id" class="draft-row"><div><strong>{{ draft.title }}</strong><span>{{ draft.fileName }} · {{ formatTime(draft.updatedAt || draft.createdAt) }}</span><p v-if="draft.summary">{{ draft.summary }}</p><small v-if="draft.error" class="error-copy">{{ draft.error }}</small></div><div class="draft-actions"><NTag :type="draftStatusType(draft.status)" :bordered="false">{{ draftStatusLabel(draft.status) }}</NTag><NButton size="tiny" @click="openDraft(draft)">查看</NButton><NPopconfirm v-if="draft.status === 'trusted' && (draft.publishedPages?.length ?? 0) > 0" @positive-click="removeTrustedDraft(draft)"><template #trigger><NButton size="tiny" type="error" secondary :loading="deletingDraftId === draft.id">删除</NButton></template>确认删除「{{ draft.title }}」？将移除其已发布的 Wiki 页面并清除草稿记录；页面内容可从 Wiki 文件历史恢复。</NPopconfirm><NButton v-if="draft.status === 'awaiting_review'" size="tiny" type="primary" :loading="actingDraftId === draft.id" @click="approveDraft(draft)">批准</NButton><NButton v-if="draft.status === 'awaiting_review'" size="tiny" @click="reviseDraft = draft; revisionGuidance = ''">退回</NButton><NPopconfirm v-if="draft.status === 'awaiting_review'" @positive-click="rejectDraft(draft)"><template #trigger><NButton size="tiny" type="error" secondary>拒绝</NButton></template>确认拒绝这份草稿？</NPopconfirm></div></article></div><NEmpty v-else description="暂无论文或研究草稿" /></NSpin>
           <div class="subsection-heading"><h4>普通审核事项</h4><NButton size="tiny" text :disabled="!reviews.length" @click="resolveAllReviews">全部处理</NButton></div>

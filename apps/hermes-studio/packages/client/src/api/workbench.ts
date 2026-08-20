@@ -426,6 +426,13 @@ export async function syncWechatSources(sourceId?: string): Promise<WechatSyncRe
   })
 }
 
+export async function importWechatLink(url: string, sourceName?: string): Promise<{ draftId: string; title: string; url: string }> {
+  return request<{ draftId: string; title: string; url: string }>('/api/knowledge/wechat-import', {
+    method: 'POST',
+    body: JSON.stringify({ url, ...(sourceName ? { sourceName } : {}) }),
+  })
+}
+
 export async function listKnowledgeDrafts(): Promise<KnowledgeDraft[]> {
   const result = await request<unknown>('/api/knowledge/drafts')
   return arrayFromResponse(result, 'drafts').map(normalizeDraft)

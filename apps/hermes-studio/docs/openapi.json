@@ -2565,6 +2565,32 @@
         }
       }
     },
+    "/api/workbench/wechat-import": {
+      "post": {
+        "tags": [
+          "Workbench"
+        ],
+        "summary": "Create wechat-import",
+        "description": "POST /api/workbench/wechat-import",
+        "operationId": "createWechat-import",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
     "/api/workbench/wechat-sources": {
       "get": {
         "tags": [

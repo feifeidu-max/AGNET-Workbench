@@ -715,3 +715,47 @@ knowledgeRoutes.post('/api/knowledge/generated-drafts', async (ctx: Context) => 
     setProxyError(ctx, error)
   }
 })
+
+/**
+ * Single-link WeChat article import via the same strict gate as PDF.
+ * The link is fetched server-side, scored, de-duplicated and written as a
+ * generated draft behind the review workflow — never directly as a trusted
+ * wiki page. Exposed under /api/knowledge so the KnowledgeStudio BFF can
+ * share auth/timeouts/error shapes with the rest of the wiki plane.
+ */
+const WECHAT_KNOWLEDGE_RATE = new Map<string, number[]>()
+function allowWechatKnowledgeLink(ip: string): boolean {
+  const now = Date.now()
+  const windowMs = 60_000
+  const maxInWindow = 6
+  let hits = WECHAT_KNOWLEDGE_RATE.get(ip) ?? []
+  hits = hits.filter((t) => now - t < windowMs)
+  if (hits.length >= maxInWindow) return false
+  hits.push(now)
+  WECHAT_KNOWLEDGE_RATE.set(ip, hits)
+  return true
+}
+knowledgeRoutes.post('/api/knowledge/wechat-import', async (ctx: Context) => {
+  const ip = (ctx.ip || (ctx.request as { ip?: string }).ip || 'unknown').toString()
+  if (!allowWechatKnowledgeLink(ip)) {
+    ctx.status = 429
+    ctx.body = { error: '操作过于频繁，请稍后再试' }
+    return
+  }
+  try {
+    const body = (ctx.request as any).body || {}
+    const rawUrl = typeof body.url === 'string' ? body.url : typeof body.link === 'string' ? body.link : ''
+    const sourceName = typeof body.sourceName === 'string' ? body.sourceName : undefined
+    // Lazy import to avoid a static cycle between routes/knowledge and
+    // services/wechat-article-sync (which also imports from knowledge/client).
+    const { importWechatArticleLink } = await import('../services/wechat-article-sync')
+    const result = await importWechatArticleLink(rawUrl, sourceName)
+    ctx.status = 201
+    ctx.body = { draftId: result.draftId, title: result.title, url: result.url }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const isBadRequest = /仅支持|请输入合法|未提取到|相关度不足|已导入过|验证页/.test(message)
+    ctx.status = isBadRequest ? 400 : 502
+    ctx.body = { error: message }
+  }
+})
