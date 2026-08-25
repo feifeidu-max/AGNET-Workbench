@@ -9,6 +9,7 @@ import {
   NInput,
   NModal,
   NPopconfirm,
+  NProgress,
   NSelect,
   NSpin,
   NTag,
@@ -99,6 +100,7 @@ const message = useMessage()
 const viewItems: Array<{ key: WorkbenchView; label: string }> = [
   { key: 'overview', label: '概览' },
   { key: 'wiki', label: 'Wiki' },
+  { key: 'graph', label: '知识图谱' },
   { key: 'review', label: '审核' },
 ]
 
@@ -1056,13 +1058,23 @@ onMounted(async () => {
             <div class="enrich-panel__info">
               <strong>AI 语义增强（离线）</strong>
               <span>调用后台配置的大模型对已入库文章做语义摘要、主题分类、实体关系抽取，并为知识图谱生成更具体的关系标签（覆盖层，删除即可回退）。</span>
+              <small v-if="enrichStatus?.running && enrichStatus.phase === 'pages'" class="enrich-panel__phase">阶段 1/2：正在逐篇生成语义摘要/分类/实体…（当前文件：{{ enrichStatus.current || '准备中' }}）</small>
+              <small v-else-if="enrichStatus?.running && enrichStatus.phase === 'relations'" class="enrich-panel__phase">阶段 2/2：正在为文章对生成关系标签…</small>
               <small v-if="enrichStatus?.overlay?.available">已增强 {{ enrichStatus.overlay.pages }} 篇 · {{ enrichStatus.overlay.relations }} 条 LLM 关系 · 模型 {{ enrichStatus.overlay.model || enrichStatus.model || '—' }}</small>
               <small v-else>尚未生成增强覆盖层</small>
+              <small class="enrich-panel__note">增强为后台任务，每完成一页立即落盘；刷新浏览器或关闭页面都不会丢失进度，重新进入本页即可继续查看状态。</small>
             </div>
             <div class="enrich-panel__actions">
               <NButton type="primary" secondary :loading="enrichLoading || enrichStatus?.running" @click="triggerEnrich">{{ enrichStatus?.running ? `增强中 ${enrichStatus.done}/${enrichStatus.total} (${enrichStatus.phase})` : 'AI 增强' }}</NButton>
               <NButton size="small" text :disabled="!!enrichStatus?.running" @click="loadEnrichStatus(); loadGraph()">刷新状态</NButton>
             </div>
+            <NProgress
+              v-if="enrichStatus?.running && enrichStatus.total > 0"
+              type="line"
+              :percentage="Math.round(enrichStatus.done / enrichStatus.total * 100)"
+              indicator-placement="inside"
+              style="grid-column: 1 / -1"
+            />
             <NAlert v-if="enrichStatus?.running" type="info" class="enrich-progress">正在处理：{{ enrichStatus.current || '准备中' }} · 已完成 {{ enrichStatus.done }}/{{ enrichStatus.total }}，失败 {{ enrichStatus.failed }}</NAlert>
             <NAlert v-if="enrichStatus?.lastError && !enrichStatus.running" type="warning" class="enrich-progress">{{ enrichStatus.lastError }}</NAlert>
           </section>
@@ -1472,6 +1484,10 @@ onMounted(async () => {
 .enrich-panel__info small { color: $text-muted; font-size: 11px; }
 .enrich-panel__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; align-self: start; }
 .enrich-progress { grid-column: 1 / -1; }
+.enrich-panel__phase { color: $text-secondary; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.enrich-panel__note { border-top: 1px dashed $border-light; padding-top: 6px; margin-top: 2px; }
+/* NProgress 与面板内其他元素保持一致间距（叠加在 grid gap 之上） */
+.enrich-panel :deep(.n-progress) { grid-column: 1 / -1; min-height: 18px; align-self: center; }
 .graph-toolbar { flex-wrap: wrap; }
 
 @media (max-width: 1100px) {
