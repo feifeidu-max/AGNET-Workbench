@@ -58,8 +58,11 @@ import {
   sendKnowledgeChat,
   stageGeneratedKnowledgeDraft,
   updateKnowledgeReview,
+  fetchKnowledgeEnrichStatus,
+  triggerKnowledgeEnrich,
   type KnowledgeChatMessage,
   type KnowledgeChatSession,
+  type KnowledgeEnrichStatus,
   type KnowledgeFileHistoryEntry,
   type KnowledgeFileNode,
   type KnowledgeLintIssue,
@@ -149,6 +152,10 @@ const graphLoading = ref(false)
 const graphError = ref('')
 const graphFilter = ref('')
 const graphPaperOnly = ref(true)
+const enrichStatus = ref<KnowledgeEnrichStatus | null>(null)
+const enrichLoading = ref(false)
+const enrichPollTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const searchRerank = ref(false)
 
 const drafts = ref<KnowledgeDraft[]>([])
 const draftsLoading = ref(false)
@@ -348,7 +355,11 @@ async function ensureViewLoaded(view: WorkbenchView) {
   if (view === 'wiki' || view === 'sources') {
     if (!wikiFiles.value.length && !filesLoading.value) await loadFiles()
   }
-  if (view === 'graph' && !graph.value.nodes.length && !graphLoading.value) await loadGraph()
+  if (view === 'graph') {
+    if (!graph.value.nodes.length && !graphLoading.value) await loadGraph()
+    if (!enrichStatus.value) await loadEnrichStatus()
+    if (enrichStatus.value?.running) startEnrichPolling()
+  }
   if (view === 'review') await Promise.all([loadDrafts(), loadReviews()])
   if (view === 'chat') await Promise.all([loadChatSessions(), loadSkills()])
   if (view === 'research') await loadSkills()
@@ -661,7 +672,7 @@ async function searchWiki() {
   trustedSearched.value = true
   trustedError.value = ''
   try {
-    trustedResults.value = await searchTrustedKnowledge(query)
+    trustedResults.value = await searchTrustedKnowledge(query, { rerank: searchRerank.value })
   } catch (error) {
     trustedResults.value = []
     trustedError.value = error instanceof Error ? error.message : '可信 Wiki 检索失败'
@@ -690,6 +701,43 @@ async function loadGraph() {
 async function openGraphNode(node: Record<string, unknown>) {
   const path = graphPath(node)
   if (path.startsWith('wiki/')) await openWikiFile(path)
+}
+
+async function loadEnrichStatus() {
+  try {
+    enrichStatus.value = await fetchKnowledgeEnrichStatus()
+  } catch {
+    // 覆盖层尚未创建时静默忽略
+  }
+}
+
+function startEnrichPolling() {
+  if (enrichPollTimer.value) clearInterval(enrichPollTimer.value)
+  enrichPollTimer.value = setInterval(async () => {
+    await loadEnrichStatus()
+    const running = enrichStatus.value?.running
+    if (!running) {
+      if (enrichPollTimer.value) clearInterval(enrichPollTimer.value)
+      enrichPollTimer.value = null
+      await loadGraph()
+      if (enrichStatus.value?.phase === 'done') message.success('AI 语义增强已完成，图谱标签已更新')
+      if (enrichStatus.value?.phase === 'failed') message.error(enrichStatus.value.lastError || '语义增强失败，请检查 LLM 配置')
+    }
+  }, 2500)
+}
+
+async function triggerEnrich() {
+  if (enrichLoading.value) return
+  enrichLoading.value = true
+  try {
+    enrichStatus.value = await triggerKnowledgeEnrich({ limit: 40, includeRelations: true })
+    message.success('已启动 AI 语义增强任务')
+    startEnrichPolling()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '启动语义增强失败')
+  } finally {
+    enrichLoading.value = false
+  }
 }
 
 async function loadSkills() {
@@ -994,8 +1042,8 @@ onMounted(async () => {
         </section>
 
         <section v-else-if="activeView === 'search'" class="knowledge-view">
-          <div class="section-heading"><div><h3>可信 Wiki 检索</h3><p>只检索已批准的正式 Wiki，不读取草稿暂存区。</p></div></div>
-          <div class="query-row"><NInput v-model:value="trustedQuery" placeholder="搜索已学习过的论文和知识页面" @keyup.enter="searchWiki" /><NButton type="primary" :loading="trustedLoading" :disabled="!trustedQuery.trim()" @click="searchWiki">检索</NButton></div>
+          <div class="section-heading"><div><h3>可信 Wiki 检索</h3><p>只检索已批准的正式 Wiki，不读取草稿暂存区；开启“LLM 重排”后在大模型侧做混合检索的重排序。</p></div></div>
+          <div class="query-row"><NInput v-model:value="trustedQuery" placeholder="搜索已学习过的论文和知识页面" @keyup.enter="searchWiki" /><NCheckbox v-model:checked="searchRerank">LLM 重排</NCheckbox><NButton type="primary" :loading="trustedLoading" :disabled="!trustedQuery.trim()" @click="searchWiki">检索</NButton></div>
           <NAlert v-if="trustedError" type="error" class="knowledge-studio__alert">{{ trustedError }}</NAlert>
           <div v-if="trustedResults.length" class="result-list"><article v-for="result in trustedResults" :key="result.id" class="result-row"><button type="button" class="result-main" @click="openSearchResult(result)"><strong>{{ result.title }}</strong><span>{{ result.authors.join('、') }}<template v-if="result.year"> · {{ result.year }}</template></span><p>{{ result.excerpt }}</p></button><a v-if="result.sourceUrl" :href="result.sourceUrl" target="_blank" rel="noopener noreferrer">打开证据</a></article></div>
           <NEmpty v-else-if="trustedSearched && !trustedLoading" description="可信 Wiki 中没有匹配结果" />
@@ -1003,9 +1051,23 @@ onMounted(async () => {
         </section>
 
         <section v-else-if="activeView === 'graph'" class="knowledge-view">
-          <div class="section-heading"><div><h3>知识图谱</h3><p>仅显示 Wiki 页面中的显式链接，关系词来自文献处理阶段生成的页面关系；草稿不参与图谱。</p></div><NButton size="small" :loading="graphLoading" @click="loadGraph">刷新图谱</NButton></div>
+          <div class="section-heading"><div><h3>知识图谱</h3><p>显式链接与关键词相似边；启用“AI 语义增强”后，图谱将优先用大模型生成的关系标签（标注为 LLM）替换推断标签。</p></div><NButton size="small" :loading="graphLoading" @click="loadGraph">刷新图谱</NButton></div>
+          <section class="enrich-panel">
+            <div class="enrich-panel__info">
+              <strong>AI 语义增强（离线）</strong>
+              <span>调用后台配置的大模型对已入库文章做语义摘要、主题分类、实体关系抽取，并为知识图谱生成更具体的关系标签（覆盖层，删除即可回退）。</span>
+              <small v-if="enrichStatus?.overlay?.available">已增强 {{ enrichStatus.overlay.pages }} 篇 · {{ enrichStatus.overlay.relations }} 条 LLM 关系 · 模型 {{ enrichStatus.overlay.model || enrichStatus.model || '—' }}</small>
+              <small v-else>尚未生成增强覆盖层</small>
+            </div>
+            <div class="enrich-panel__actions">
+              <NButton type="primary" secondary :loading="enrichLoading || enrichStatus?.running" @click="triggerEnrich">{{ enrichStatus?.running ? `增强中 ${enrichStatus.done}/${enrichStatus.total} (${enrichStatus.phase})` : 'AI 增强' }}</NButton>
+              <NButton size="small" text :disabled="!!enrichStatus?.running" @click="loadEnrichStatus(); loadGraph()">刷新状态</NButton>
+            </div>
+            <NAlert v-if="enrichStatus?.running" type="info" class="enrich-progress">正在处理：{{ enrichStatus.current || '准备中' }} · 已完成 {{ enrichStatus.done }}/{{ enrichStatus.total }}，失败 {{ enrichStatus.failed }}</NAlert>
+            <NAlert v-if="enrichStatus?.lastError && !enrichStatus.running" type="warning" class="enrich-progress">{{ enrichStatus.lastError }}</NAlert>
+          </section>
           <NAlert v-if="graphError" type="error" class="knowledge-studio__alert">{{ graphError }}</NAlert>
-          <div class="graph-toolbar"><NInput v-model:value="graphFilter" placeholder="输入论文标题，保留匹配节点及其一跳邻居" /><NCheckbox v-model:checked="graphPaperOnly">仅看论文</NCheckbox><NTag :bordered="false">{{ filteredGraphNodes.length }} 节点 · {{ filteredGraphEdges.length }} 条图谱链接（含关键词相似）</NTag></div>
+          <div class="graph-toolbar"><NInput v-model:value="graphFilter" placeholder="输入论文标题，保留匹配节点及其一跳邻居" /><NCheckbox v-model:checked="graphPaperOnly">仅看论文</NCheckbox><NTag :bordered="false">{{ filteredGraphNodes.length }} 节点 · {{ filteredGraphEdges.length }} 条图谱链接（含关键词相似 · LLM 增强优先）</NTag></div>
           <NSpin :show="graphLoading"><KnowledgeGraphNetwork v-if="filteredGraphNodes.length" :nodes="filteredGraphNodes" :edges="filteredGraphEdges" @open="openGraphNode" /><NEmpty v-else description="暂无知识图谱节点" /></NSpin>
         </section>
 
@@ -1394,6 +1456,23 @@ onMounted(async () => {
 .draft-change-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+
+.enrich-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border: 1px solid $border-light;
+  border-radius: $radius-sm;
+  background: $bg-secondary;
+}
+.enrich-panel__info { display: grid; gap: 4px; }
+.enrich-panel__info strong { font-size: 13px; }
+.enrich-panel__info span { color: $text-secondary; font-size: 12px; line-height: 1.5; }
+.enrich-panel__info small { color: $text-muted; font-size: 11px; }
+.enrich-panel__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; align-self: start; }
+.enrich-progress { grid-column: 1 / -1; }
+.graph-toolbar { flex-wrap: wrap; }
 
 @media (max-width: 1100px) {
   .overview-grid,

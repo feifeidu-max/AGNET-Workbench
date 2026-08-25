@@ -57,17 +57,18 @@ const REVIEW_STAGE_MIN_SIGNAL_CHARS = 10_000
 const REVIEW_STAGE_MIN_FILE_BLOCKS = 4
 const AGGREGATE_WIKI_PATHS = ["wiki/index.md", "wiki/overview.md", "wiki/log.md"] as const
 const GRAPH_RELATION_LABELS = [
-  "数据采集",
-  "数据存储",
-  "数据计算",
-  "数据治理",
-  "数据质量",
-  "数据安全",
-  "评测方法",
-  "工程落地",
-  "研究基础",
-  "方法改进",
+  "方法基础",
+  "理论支撑",
+  "对比方案",
+  "性能改进",
+  "评测基准",
+  "数据来源",
+  "扩展实现",
+  "工程应用",
+  "应用场景",
+  "问题变体",
   "研究延伸",
+  "数据增强",
 ] as const
 
 function appendSavedImageRefsForCaption(content: string, images: SavedImage[]): string {
@@ -2210,7 +2211,7 @@ export function buildGenerationPrompt(
     "",
     "Other rules:",
     "- Use [[wikilink]] syntax in the BODY for cross-references between pages",
-    "- Add an `## 关联关系` section to source pages. Write each important edge as `- [[target-slug]]：关系词`, where the relationship is a short Chinese phrase such as 方法基础、对比方案、性能改进、工程应用 or 研究延伸. These labels are shown directly on the knowledge graph, so never leave them vague.",
+    "- Add an `## 关联关系` section to source pages. Write each important edge as `- [[target-slug]]：关系词`, where the relationship MUST be a specific verb phrase such as 方法基础、理论支撑、对比方案、性能改进、评测基准、数据来源、扩展实现、工程应用、应用场景、问题变体 or 研究延伸 — NEVER use broad domain nouns like 数据采集/数据治理 as the relation. These labels are shown directly on the knowledge graph, so never leave them vague.",
     "- If you include images, use wiki-root-relative paths such as `media/source-slug/image.png`; never output absolute filesystem paths.",
     "- Preserve subject boundaries: when a source discusses multiple entities/models/products/methods, keep claims, evaluations, limitations, benchmark results, and recommendations attached to the exact subject they describe.",
     "- Do not merge or generalize a claim about one subject into another subject's page solely because they share terms (for example context window size, benchmark name, dataset, architecture, or feature name).",

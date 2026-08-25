@@ -289,11 +289,12 @@ knowledgeRoutes.get('/api/knowledge/search', async (ctx: Context) => {
     ctx.body = { error: 'query_required' }
     return
   }
+  const rerank = String(ctx.query.rerank ?? '').toLowerCase() === 'true'
   try {
     const payload = await llmWikiJson<Record<string, any>>('/projects/current/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, topK: 10, includeContent: false, trustedOnly: true }),
+      body: JSON.stringify({ query, topK: 10, includeContent: false, trustedOnly: true, rerank, rerankTopN: rerank ? 20 : undefined }),
     })
     const results = Array.isArray(payload.results) ? payload.results : []
     for (const result of results) {
@@ -367,6 +368,40 @@ knowledgeRoutes.post('/api/knowledge/chat', async (ctx: Context) => {
 
 knowledgeRoutes.get('/api/knowledge/graph', async (ctx: Context) => {
   try { ctx.body = await llmWikiJson('/projects/current/graph?limit=500') } catch (error) { setProxyError(ctx, error) }
+})
+
+// ---------------------------------------------------------------------------
+// LLM 语义增强（知识库整理）：后台大模型对已入库文章做语义摘要、主题分类、
+// 实体关系抽取，并为知识图谱生成更丰富的文章间关系标签。
+// 启动接口立即返回（202），进度通过 /status 轮询；结果写入 LLM Wiki 项目的
+// .llm-wiki/llm-enrichment.json 覆盖层，不改动任何已发布的 wiki 页面。
+// ---------------------------------------------------------------------------
+
+knowledgeRoutes.post('/api/knowledge/enrich', async (ctx: Context) => {
+  const body = (ctx.request as any).body || {}
+  const limit = Number.isFinite(Number(body.limit)) ? Number(body.limit) : undefined
+  try {
+    ctx.status = 202
+    ctx.body = await llmWikiJson('/projects/current/enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        limit,
+        force: body.force === true,
+        includeRelations: body.includeRelations !== false,
+      }),
+    }, 30_000)
+  } catch (error) {
+    setProxyError(ctx, error)
+  }
+})
+
+knowledgeRoutes.get('/api/knowledge/enrich/status', async (ctx: Context) => {
+  try { ctx.body = await llmWikiJson('/projects/current/enrich/status') } catch (error) { setProxyError(ctx, error) }
+})
+
+knowledgeRoutes.get('/api/knowledge/enrich', async (ctx: Context) => {
+  try { ctx.body = await llmWikiJson('/projects/current/enrich') } catch (error) { setProxyError(ctx, error) }
 })
 
 knowledgeRoutes.get('/api/knowledge/sources/:sourceId/pdf', async (ctx: Context) => {

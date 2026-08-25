@@ -333,6 +333,13 @@ fn handle_request(
             handle_search(app, project_id, body_text)
         }
         (&Method::Get, ["projects", project_id, "graph"]) => handle_graph(app, project_id, query),
+        (&Method::Post, ["projects", project_id, "enrich"]) => {
+            handle_enrich_start(app, project_id, body_text)
+        }
+        (&Method::Get, ["projects", project_id, "enrich"]) => handle_enrich_info(app, project_id),
+        (&Method::Get, ["projects", project_id, "enrich", "status"]) => {
+            handle_enrich_status(app, project_id)
+        }
         (&Method::Post, ["projects", project_id, "sources", "rescan"]) => {
             handle_rescan(app, project_id)
         }
@@ -2835,6 +2842,102 @@ struct SearchRequest {
     top_k: Option<usize>,
     include_content: Option<bool>,
     query_embedding: Option<Vec<f32>>,
+    /// 混合检索（关键词+向量+图谱）完成后，用后台配置的大模型对候选重排。
+    #[serde(default)]
+    rerank: Option<bool>,
+    /// 送入重排模型的候选数量上限（5-30，默认 20）。
+    #[serde(default)]
+    rerank_top_n: Option<usize>,
+}
+
+/// 执行可选的 LLM 重排：返回 (结果列表, 是否重排成功, 重排器信息)。
+/// 任何失败都会原样返回输入列表（混合检索顺序），绝不丢结果。
+fn apply_llm_rerank(
+    app: &AppHandle,
+    query: &str,
+    results: Vec<Value>,
+    top_k: usize,
+    rerank_top_n: Option<usize>,
+) -> (Vec<Value>, bool, Value) {
+    let config = load_agent_runtime_config(app).llm;
+    let Some(config) = config.filter(|config| config.is_usable_for_backend_http()) else {
+        eprintln!("[Search] LLM rerank requested but no usable LLM config; keeping hybrid order");
+        return (results, false, json!({ "skipped": "llm_not_configured" }));
+    };
+    let client = match agent::provider::LlmClient::new(config.clone()) {
+        Ok(client) => client,
+        Err(_) => return (results, false, json!({ "skipped": "llm_client_error" })),
+    };
+    let pool_size = rerank_top_n
+        .unwrap_or(20)
+        .clamp(5, 30)
+        .min(results.len());
+    let candidates = results
+        .iter()
+        .take(pool_size)
+        .enumerate()
+        .map(|(index, value)| crate::llm_enrich::RerankCandidate {
+            index,
+            title: value
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            snippet: value
+                .get("snippet")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            path: value
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        })
+        .collect::<Vec<_>>();
+    let verdicts =
+        match tauri::async_runtime::block_on(crate::llm_enrich::rerank_candidates(
+            &client,
+            query,
+            &candidates,
+        )) {
+            Ok(verdicts) => verdicts,
+            Err(error) => {
+                eprintln!("[Search] LLM rerank failed, keeping hybrid order: {error}");
+                return (
+                    results,
+                    false,
+                    json!({ "skipped": "rerank_failed", "error": error }),
+                );
+            }
+        };
+    let mut pool_slots: Vec<Option<Value>> = results.into_iter().map(Some).collect();
+    let mut reordered = Vec::with_capacity(pool_slots.len());
+    for verdict in &verdicts {
+        if let Some(Some(mut item)) = pool_slots.get_mut(verdict.index).map(std::mem::take) {
+            if let Some(object) = item.as_object_mut() {
+                object.insert("rerankScore".to_string(), json!(verdict.score));
+                if !verdict.reason.is_empty() {
+                    object.insert("rerankReason".to_string(), json!(verdict.reason));
+                }
+            }
+            reordered.push(item);
+        }
+    }
+    // 池外候选保持混合检索顺序排在后面；最终截断到 top_k。
+    for item in pool_slots.into_iter().flatten() {
+        reordered.push(item);
+    }
+    reordered.truncate(top_k.max(1));
+    (
+        reordered,
+        true,
+        json!({
+            "provider": config.provider,
+            "model": config.model,
+            "candidates": candidates.len(),
+        }),
+    )
 }
 
 fn handle_search(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
@@ -2850,6 +2953,15 @@ fn handle_search(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
         return err(400, "query is required");
     }
     let top_k = req.top_k.unwrap_or(10).clamp(1, MAX_SEARCH_RESULTS);
+    let want_rerank = req.rerank.unwrap_or(false);
+    // 重排需要更大的候选池：先取 3 倍候选，重排后截断回 top_k。
+    let fetch_k = if want_rerank {
+        top_k
+            .saturating_mul(3)
+            .clamp(top_k + 6, MAX_SEARCH_RESULTS)
+    } else {
+        top_k
+    };
     let query = req.query;
     let query_embedding =
         match tauri::async_runtime::block_on(commands::search::resolve_query_embedding(
@@ -2862,13 +2974,13 @@ fn handle_search(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
         };
     match tauri::async_runtime::block_on(commands::search::search_project_inner(
         project.path.clone(),
-        query,
-        top_k,
+        query.clone(),
+        fetch_k,
         req.include_content.unwrap_or(false),
         query_embedding,
     )) {
         Ok(search) => {
-            let results = search
+            let mut results = search
                 .results
                 .into_iter()
                 .map(|result| {
@@ -2885,6 +2997,14 @@ fn handle_search(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
                     value
                 })
                 .collect::<Vec<_>>();
+            let (reranked, reranker) = if want_rerank {
+                let (reordered, ok_rerank, info) =
+                    apply_llm_rerank(app, &query, results, top_k, req.rerank_top_n);
+                results = reordered;
+                (ok_rerank, Some(info))
+            } else {
+                (false, None)
+            };
             ok(json!({
                 "ok": true,
                 "projectId": project.id,
@@ -2893,6 +3013,8 @@ fn handle_search(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
                 "tokenHits": search.token_hits,
                 "vectorHits": search.vector_hits,
                 "graphHits": search.graph_hits,
+                "reranked": reranked,
+                "reranker": reranker,
                 "results": results,
             }))
         }
@@ -3353,6 +3475,10 @@ struct ApiGraphNode {
     year: Option<u32>,
     #[serde(skip_serializing_if = "String::is_empty")]
     summary: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    topics: Vec<String>,
+    #[serde(default)]
+    enriched: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3363,6 +3489,12 @@ struct ApiGraphEdge {
     weight: f64,
     kind: String,
     relation: String,
+    /// llm | link | inferred —— 关系标签的来源。
+    #[serde(skip_serializing_if = "String::is_empty")]
+    relation_source: String,
+    /// LLM 给出的一句话依据（仅 llm 来源时有值）。
+    #[serde(skip_serializing_if = "String::is_empty")]
+    evidence: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     shared_terms: Vec<String>,
 }
@@ -3380,6 +3512,10 @@ struct GraphPage {
     year: Option<u32>,
     summary: String,
     terms: BTreeMap<String, f64>,
+    /// LLM 增强的具体研究主题（覆盖层，内容哈希校验通过才填充）。
+    topics: Vec<String>,
+    /// 该页面是否命中了有效的 LLM 增强结果。
+    enriched: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -3424,8 +3560,76 @@ fn handle_graph(app: &AppHandle, project_id: &str, query: &str) -> ApiResponse {
     }
 }
 
+fn handle_enrich_start(app: &AppHandle, project_id: &str, body: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct EnrichRequest {
+        limit: Option<usize>,
+        force: Option<bool>,
+        include_relations: Option<bool>,
+    }
+    let options: crate::llm_enrich::EnrichOptions = if body.trim().is_empty() {
+        Default::default()
+    } else {
+        match serde_json::from_str::<EnrichRequest>(body) {
+            Ok(request) => crate::llm_enrich::EnrichOptions {
+                limit: request.limit,
+                force: request.force,
+                include_relations: request.include_relations,
+            },
+            Err(error) => return err(400, format!("Invalid JSON: {error}")),
+        }
+    };
+    // 环境变量优先，其次应用内设置——与 Agent 对话使用同一套后台 API Key。
+    let Some(llm) = load_agent_runtime_config(app).llm else {
+        return err(
+            409,
+            "LLM 未配置：请先在设置中配置模型（provider/model/apiKey）或设置 LLM_WIKI_LLM_* 环境变量",
+        );
+    };
+    match crate::llm_enrich::start_enrichment(project.id.clone(), project.path.clone(), llm, options)
+    {
+        Ok(status) => ok(status),
+        Err(error) if error.contains("已有增强任务") || error.contains("LLM 未配置") => {
+            err(409, error)
+        }
+        Err(error) => err(500, error),
+    }
+}
+
+fn handle_enrich_status(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let mut status = crate::llm_enrich::job_status(&project.path);
+    if let Some(object) = status.as_object_mut() {
+        object.insert("ok".to_string(), json!(true));
+        object.insert("projectId".to_string(), json!(project.id));
+    }
+    ok(status)
+}
+
+fn handle_enrich_info(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    ok(json!({
+        "ok": true,
+        "projectId": project.id,
+        "overlay": crate::llm_enrich::overlay_summary(&project.path),
+    }))
+}
+
 fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdge>), String> {
     let wiki_root = Path::new(project_path).join("wiki");
+    // LLM 增强覆盖层（可选）：内容哈希匹配的条目才会参与标签/摘要/关系。
+    let overlay = crate::llm_enrich::load_overlay(project_path);
     let mut raw: BTreeMap<String, GraphPage> = BTreeMap::new();
     for entry in WalkDir::new(&wiki_root).into_iter().filter_map(Result::ok) {
         if !entry.file_type().is_file()
@@ -3472,11 +3676,31 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
         if tags.is_empty() {
             tags = infer_data_domain_tags(&format!("{title} {content}"));
         }
+        let mut summary = extract_frontmatter_value(&content, "summary")
+            .unwrap_or_else(|| extract_summary(&content));
+        // LLM 增强覆盖层：内容未变时，用模型给出的更具体领域标签扩充节点标签，
+        // 并优先使用语义摘要。陈旧条目（页面已编辑）自动失效。
+        let enriched_page = overlay
+            .as_ref()
+            .and_then(|overlay| overlay.pages.get(&id))
+            .filter(|entry| entry.content_hash == crate::llm_enrich::content_hash(&content));
+        let mut topics = Vec::new();
+        let mut enriched = false;
+        if let Some(entry) = enriched_page {
+            enriched = true;
+            if !entry.summary.is_empty() {
+                summary = entry.summary.clone();
+            }
+            topics = entry.topics.clone();
+            for tag in &entry.tags {
+                if !tags.contains(tag) && tags.len() < 8 {
+                    tags.push(tag.clone());
+                }
+            }
+        }
         let authors = extract_frontmatter_list(&content, "authors");
         let year =
             extract_frontmatter_value(&content, "year").and_then(|value| value.parse::<u32>().ok());
-        let summary = extract_frontmatter_value(&content, "summary")
-            .unwrap_or_else(|| extract_summary(&content));
         let links = extract_graph_links(&content);
         let terms = if matches!(
             content_kind.as_str(),
@@ -3501,6 +3725,8 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
                 year,
                 summary,
                 terms,
+                topics,
+                enriched,
             },
         );
     }
@@ -3524,13 +3750,29 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
             if seen.insert(key) {
                 *link_count.entry(source.clone()).or_default() += 1;
                 *link_count.entry(target.clone()).or_default() += 1;
+                let mut relation = if link.relation.is_empty() {
+                    inferred_graph_relation(page, raw.get(&target), &[])
+                } else {
+                    link.relation.clone()
+                };
+                let mut relation_source = if link.relation.is_empty() {
+                    "inferred".to_string()
+                } else {
+                    "link".to_string()
+                };
+                let mut evidence = String::new();
+                if let Some((llm_relation, llm_evidence)) =
+                    overlay_relation_label(overlay.as_ref(), &raw, source, &target)
+                {
+                    relation = llm_relation;
+                    evidence = llm_evidence;
+                    relation_source = "llm".to_string();
+                }
                 edges.push(ApiGraphEdge {
                     source: source.clone(),
-                    relation: if link.relation.is_empty() {
-                        inferred_graph_relation(page, raw.get(&target), &[])
-                    } else {
-                        link.relation.clone()
-                    },
+                    relation,
+                    relation_source,
+                    evidence,
                     target,
                     weight: 1.0,
                     kind: "wikilink".to_string(),
@@ -3540,7 +3782,7 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
         }
     }
 
-    add_keyword_similarity_edges(&raw, &mut link_count, &mut seen, &mut edges);
+    add_keyword_similarity_edges(&raw, overlay.as_ref(), &mut link_count, &mut seen, &mut edges);
 
     let nodes = raw
         .into_iter()
@@ -3557,13 +3799,34 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
             authors: page.authors,
             year: page.year,
             summary: page.summary,
+            topics: page.topics,
+            enriched: page.enriched,
         })
         .collect();
     Ok((nodes, edges))
 }
 
+/// 若覆盖层中存在该文章对（双向）的 LLM 关系标签且两端页面内容均未变化，
+/// 返回 `(关系短语, 依据)`。
+fn overlay_relation_label(
+    overlay: Option<&crate::llm_enrich::EnrichmentOverlay>,
+    pages: &BTreeMap<String, GraphPage>,
+    source: &str,
+    target: &str,
+) -> Option<(String, String)> {
+    let overlay = overlay?;
+    let source_fresh = pages.get(source)?.enriched;
+    let target_fresh = pages.get(target)?.enriched;
+    if !source_fresh || !target_fresh {
+        return None;
+    }
+    let relation = overlay.relation_for(source, target)?;
+    Some((relation.relation.clone(), relation.evidence.clone()))
+}
+
 fn add_keyword_similarity_edges(
     pages: &BTreeMap<String, GraphPage>,
+    overlay: Option<&crate::llm_enrich::EnrichmentOverlay>,
     link_count: &mut BTreeMap<String, usize>,
     seen: &mut BTreeSet<String>,
     edges: &mut Vec<ApiGraphEdge>,
@@ -3665,12 +3928,25 @@ fn add_keyword_similarity_edges(
         similarity_degree[right] += 1;
         *link_count.entry(source.clone()).or_default() += 1;
         *link_count.entry(target.clone()).or_default() += 1;
+        let mut relation =
+            inferred_graph_relation(papers[left].1, Some(papers[right].1), &shared_terms);
+        let mut relation_source = "inferred".to_string();
+        let mut evidence = String::new();
+        if let Some((llm_relation, llm_evidence)) =
+            overlay_relation_label(overlay, pages, &source, &target)
+        {
+            relation = llm_relation;
+            evidence = llm_evidence;
+            relation_source = "llm".to_string();
+        }
         edges.push(ApiGraphEdge {
             source,
             target,
             weight: (score * 1000.0).round() / 1000.0,
             kind: "keyword_similarity".to_string(),
-            relation: inferred_graph_relation(papers[left].1, Some(papers[right].1), &shared_terms),
+            relation,
+            relation_source,
+            evidence,
             shared_terms,
         });
     }

@@ -58,7 +58,7 @@ flowchart LR
 | --- | --- | --- |
 | 个人工作台 | 查看今日论文、待审核数、可信知识库规模和服务健康状态 | 已完成 |
 | Hermes 对话 | 创建会话、选择 Profile 和记忆模式，使用已配置的模型进行对话 | 已完成；模型密钥需由使用者自行配置 |
-| LLM Wiki | 在 Studio 内完成项目创建/切换、论文审核、Wiki 树与编辑、文件历史、页面链接、来源库、检索、知识图谱、审核、对话、深度研究、Skills、检查和设置 | 已完成；检索为关键词 + 图谱，不含向量检索 |
+| LLM Wiki | 在 Studio 内完成项目创建/切换、论文审核、Wiki 树与编辑、文件历史、页面链接、来源库、检索、知识图谱、审核、对话、深度研究、Skills、检查和设置 | 已完成；检索为关键词 + 图谱 + 可选 LLM 重排，知识图谱支持 LLM 语义增强（语义摘要/主题分类/实体关系抽取/富化标签与关系） |
 | 记忆管理 | 管理当前 Profile 的 `MEMORY.md`、`USER.md`、`SOUL.md`，查看生效状态、版本和恢复入口 | 已完成 |
 | 全部功能 / 高级工具 | 原 Hermes Studio 的 History、Workflow、Jobs、Skills、MCP、Files、Coding Agents、Logs、Models 等 | 原有路由和 API 保留 |
 

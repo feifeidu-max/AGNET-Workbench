@@ -4,6 +4,7 @@ mod clip_server;
 mod commands;
 mod cors;
 mod ingest_gate;
+mod llm_enrich;
 mod panic_guard;
 mod proxy;
 mod server_bind;

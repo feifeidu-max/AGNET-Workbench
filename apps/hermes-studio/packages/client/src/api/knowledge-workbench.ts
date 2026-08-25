@@ -447,3 +447,64 @@ export async function rebuildKnowledgeIndex(): Promise<{ pages: number; groups: 
   const summary = record(result.result)
   return { pages: number(summary.pages), groups: number(summary.groups) }
 }
+
+export interface KnowledgeEnrichStatus {
+  running: boolean
+  phase: string
+  total: number
+  done: number
+  failed: number
+  current: string
+  provider: string
+  model: string
+  startedAt: number | null
+  finishedAt: number | null
+  lastError: string | null
+  overlay: { available: boolean; pages?: number; relations?: number; updatedAt?: number; provider?: string; model?: string }
+}
+
+export async function triggerKnowledgeEnrich(options?: { limit?: number; force?: boolean; includeRelations?: boolean }): Promise<KnowledgeEnrichStatus> {
+  const result = record(await request<unknown>('/api/knowledge/enrich', {
+    method: 'POST',
+    body: JSON.stringify({
+      limit: options?.limit,
+      force: options?.force,
+      includeRelations: options?.includeRelations,
+    }),
+  }))
+  return normalizeEnrichStatus(result)
+}
+
+export async function fetchKnowledgeEnrichStatus(): Promise<KnowledgeEnrichStatus> {
+  const result = record(await request<unknown>('/api/knowledge/enrich/status'))
+  return normalizeEnrichStatus(result)
+}
+
+export async function fetchKnowledgeEnrichInfo(): Promise<Record<string, unknown>> {
+  return record(await request<unknown>('/api/knowledge/enrich'))
+}
+
+function normalizeEnrichStatus(value: Record<string, unknown>): KnowledgeEnrichStatus {
+  const overlay = record(value.overlay)
+  return {
+    running: value.running === true,
+    phase: string(value.phase, 'idle'),
+    total: number(value.total),
+    done: number(value.done),
+    failed: number(value.failed),
+    current: string(value.current),
+    provider: string(value.provider),
+    model: string(value.model),
+    startedAt: value.startedAt === null || value.startedAt === undefined ? null : number(value.startedAt),
+    finishedAt: value.finishedAt === null || value.finishedAt === undefined ? null : number(value.finishedAt),
+    lastError: nullableString(value.lastError ?? value.last_error),
+    overlay: {
+      available: overlay.available === true,
+      pages: overlay.pages !== undefined ? number(overlay.pages) : undefined,
+      relations: overlay.relations !== undefined ? number(overlay.relations) : undefined,
+      updatedAt: overlay.updatedAt !== undefined ? number(overlay.updatedAt) : undefined,
+      provider: overlay.provider !== undefined ? string(overlay.provider) : undefined,
+      model: overlay.model !== undefined ? string(overlay.model) : undefined,
+    },
+  }
+}

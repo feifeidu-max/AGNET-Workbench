@@ -503,8 +503,10 @@ async function mutateKnowledgeDraft(
   return normalizeDraft(record.draft ?? result)
 }
 
-export async function searchTrustedKnowledge(query: string): Promise<KnowledgeSearchResult[]> {
-  const result = await request<unknown>(`/api/knowledge/search?q=${encodeURIComponent(query.trim())}`)
+export async function searchTrustedKnowledge(query: string, options?: { rerank?: boolean }): Promise<KnowledgeSearchResult[]> {
+  const params = new URLSearchParams({ q: query.trim() })
+  if (options?.rerank) params.set('rerank', 'true')
+  const result = await request<unknown>(`/api/knowledge/search?${params.toString()}`)
   return arrayFromResponse(result, 'results').map(normalizeSearchResult)
 }
 

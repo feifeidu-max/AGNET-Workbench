@@ -41,8 +41,15 @@ function graphNodeId(node: Record<string, unknown>): string {
 
 function edgeLabel(edge: Record<string, unknown>): string {
   const relation = text(edge.relation ?? edge.label)
+  const source = text(edge.relationSource ?? edge.relation_source)
+  // LLM 生成的关系标签是具体动词短语（如“提供评测基准”），必须原样展示，不应被领域词过滤。
+  if (source === 'llm' && relation) return relation
   if (!relation || /paper:|sourceId|^[([{]|[{}\]]/.test(relation)) return 'Wiki 链接'
   return relation
+}
+
+function edgeIsLlm(edge: Record<string, unknown>): boolean {
+  return text(edge.relationSource ?? edge.relation_source) === 'llm'
 }
 
 function nodeColor(type: string): string {
@@ -165,18 +172,22 @@ async function rebuildGraph() {
   })
   flowEdges.value = validEdges.map((edge, index) => {
     const kind = text(edge.kind, 'wikilink')
+    const isLlm = edgeIsLlm(edge)
+    const evidence = text(edge.evidence)
     return {
       id: `${kind}:${text(edge.source)}:${text(edge.target)}:${index}`,
       source: text(edge.source),
       target: text(edge.target),
       type: 'default',
       label: edgeLabel(edge),
-      labelStyle: { fill: 'var(--ph-text-medium, #555555)', fontSize: 10, fontWeight: 600 },
-      labelBgStyle: { fill: 'var(--ph-card, #ffffff)', fillOpacity: 0.92 },
+      labelStyle: { fill: isLlm ? '#0d47a1' : 'var(--ph-text-medium, #555555)', fontSize: 10, fontWeight: isLlm ? 700 : 600 },
+      labelBgStyle: { fill: 'var(--ph-card, #ffffff)', fillOpacity: 0.96 },
       labelBgPadding: [5, 3],
       labelBgBorderRadius: 2,
-      style: { stroke: '#8c9aa0', strokeWidth: 1.8, opacity: 0.86 },
-      data: { kind },
+      style: isLlm
+        ? { stroke: '#0d47a1', strokeWidth: 2.2, opacity: 0.92 }
+        : { stroke: '#8c9aa0', strokeWidth: 1.8, opacity: 0.86 },
+      data: { kind, evidence, relationSource: text(edge.relationSource ?? edge.relation_source) },
     }
   })
   await nextTick()
@@ -202,6 +213,7 @@ onUnmounted(() => {
   <div class="knowledge-graph-network">
     <div class="knowledge-graph-legend" aria-label="图谱图例">
       <span><i class="legend-line legend-line--wiki" />Wiki 显式链接</span>
+      <span><i class="legend-line legend-line--llm" />LLM 关系（深蓝）</span>
       <small>双击节点打开 Wiki</small>
     </div>
     <VueFlow
@@ -266,6 +278,7 @@ onUnmounted(() => {
 }
 
 .legend-line { display: inline-block; width: 24px; border-top: 2px solid var(--ph-navy, #003b5c); }
+.legend-line--llm { border-top-color: #0d47a1; }
 
 .knowledge-flow-node {
   display: grid;
