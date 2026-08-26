@@ -678,9 +678,14 @@ onUnmounted(() => {
                 <p class="gw-hint" style="margin:4px 0 8px">每个成员用<b>自己的微信</b>扫一次码，即获得专属机器人与独立会话（互不可见），并共享同一个知识库。无需加好友。列表每 8 秒自动刷新。</p>
 
                 <div v-if="memberQrUrl && memberQrStatus !== 'confirmed'" class="wx-qr-preview">
-                  <a :href="memberQrUrl" target="_blank" rel="noopener"><img :src="memberQrUrl" alt="成员扫码二维码" class="wx-qr-img" /></a>
-                  <p class="wx-qr-tip">请成员用手机微信扫码确认 · {{ memberQrStatus === 'scaned' ? '已扫码，等待确认…' : '等待扫码…' }}</p>
-                  <NInput v-model:value="memberDisplayName" size="small" placeholder="备注名（可选，如：张三）" style="max-width:220px; margin-top:6px" />
+                  <p class="wx-qr-tip" style="margin:0 0 4px">
+                    请成员用手机微信扫码确认 · {{ memberQrStatus === 'scaned' ? '已扫码，等待确认…' : '等待扫码…' }}
+                  </p>
+                  <NButton size="small" type="primary" tag="a" :href="memberQrUrl" target="_blank" rel="noopener">打开二维码图片</NButton>
+                  <span class="gw-hint" style="margin-left:8px">若无法显示，把链接发给成员，在手机浏览器打开后长按识别即可</span>
+                  <div style="margin-top:6px">
+                    <NInput v-model:value="memberDisplayName" size="small" placeholder="备注名（可选，如：张三）" style="max-width:220px" />
+                  </div>
                 </div>
 
                 <div v-if="visibleMembers.length" class="member-grid">
