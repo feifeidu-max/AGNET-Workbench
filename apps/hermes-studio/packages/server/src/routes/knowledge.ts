@@ -11,6 +11,13 @@ import {
   publicKnowledgeErrorMessage,
   uploadDraft,
 } from '../services/knowledge/llm-wiki-client'
+import {
+  bindMember,
+  fetchQrcode,
+  listMembers,
+  pollQrcodeStatus,
+  unbindMember,
+} from '../services/wechat-members'
 
 export const knowledgeRoutes = new Router()
 
@@ -402,6 +409,53 @@ knowledgeRoutes.get('/api/knowledge/enrich/status', async (ctx: Context) => {
 
 knowledgeRoutes.get('/api/knowledge/enrich', async (ctx: Context) => {
   try { ctx.body = await llmWikiJson('/projects/current/enrich') } catch (error) { setProxyError(ctx, error) }
+})
+
+// ---------------------------------------------------------------------------
+// 微信多成员接入：每人扫码绑定专属 iLink bot，Studio 为其创建独立 hermes home
+// 与专属网关进程；成员之间会话完全隔离，共享同一个本地知识库。
+// ---------------------------------------------------------------------------
+
+knowledgeRoutes.get('/api/knowledge/wechat/members', async (ctx: Context) => {
+  try { ctx.body = await listMembers() } catch (error) { setProxyError(ctx, error) }
+})
+
+knowledgeRoutes.post('/api/knowledge/wechat/members/qr', async (ctx: Context) => {
+  try { ctx.body = await fetchQrcode() } catch (error) { setProxyError(ctx, error) }
+})
+
+knowledgeRoutes.get('/api/knowledge/wechat/members/qr/status', async (ctx: Context) => {
+  const qrcode = String(ctx.query.qrcode || '')
+  if (!qrcode) { ctx.status = 400; ctx.body = { error: 'Missing qrcode parameter' }; return }
+  try { ctx.body = await pollQrcodeStatus(qrcode) } catch (error) { setProxyError(ctx, error) }
+})
+
+knowledgeRoutes.post('/api/knowledge/wechat/members', async (ctx: Context) => {
+  const body = (ctx.request as any).body || {}
+  try {
+    const member = await bindMember({
+      displayName: typeof body.displayName === 'string' ? body.displayName : undefined,
+      accountId: body.account_id || body.accountId,
+      token: body.token,
+      baseUrl: body.base_url || body.baseUrl,
+    })
+    ctx.status = 201
+    // 延迟数秒让网关进程起来，前端稍后轮询列表即可看到 running 状态。
+    ctx.body = { success: true, member }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    ctx.status = /上限/.test(message) ? 409 : 500
+    ctx.body = { error: message }
+  }
+})
+
+knowledgeRoutes.delete('/api/knowledge/wechat/members/:id', async (ctx: Context) => {
+  const purge = String(ctx.query.purge || '') === '1'
+  try {
+    const removed = await unbindMember(ctx.params.id, { purge })
+    if (!removed) { ctx.status = 404; ctx.body = { error: 'member_not_found' }; return }
+    ctx.body = { success: true, purged: purge }
+  } catch (error) { setProxyError(ctx, error) }
 })
 
 knowledgeRoutes.get('/api/knowledge/sources/:sourceId/pdf', async (ctx: Context) => {

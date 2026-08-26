@@ -508,3 +508,67 @@ function normalizeEnrichStatus(value: Record<string, unknown>): KnowledgeEnrichS
     },
   }
 }
+
+export interface WechatMemberView {
+  id: string
+  displayName: string
+  accountId: string
+  profileName: string
+  boundAt: string
+  status: 'active' | 'revoked' | string
+  running: boolean
+  homeDir: string
+}
+
+export async function listWechatMembers(): Promise<{ maxMembers: number; members: WechatMemberView[] }> {
+  const result = record(await request<unknown>('/api/knowledge/wechat/members'))
+  const rawMembers = array(result, 'members')
+  return {
+    maxMembers: number(result.maxMembers, 10),
+    members: rawMembers.map(item => {
+      const m = record(item)
+      return {
+        id: string(m.id),
+        displayName: string(m.displayName),
+        accountId: string(m.accountId),
+        profileName: string(m.profileName),
+        boundAt: string(m.boundAt),
+        status: string(m.status, 'active'),
+        running: m.running === true,
+        homeDir: string(m.homeDir),
+      }
+    }),
+  }
+}
+
+export async function fetchWechatMemberQr(): Promise<{ qrcode: string; qrcode_url: string }> {
+  const r = record(await request<unknown>('/api/knowledge/wechat/members/qr'))
+  return { qrcode: string(r.qrcode), qrcode_url: string(r.qrcode_url) }
+}
+
+export async function pollWechatMemberQrStatus(qrcode: string): Promise<{ status: string; account_id?: string; token?: string; base_url?: string }> {
+  const r = record(await request<unknown>(`/api/knowledge/wechat/members/qr/status?qrcode=${encodeURIComponent(qrcode)}`))
+  return { status: string(r.status, 'wait'), account_id: nullableString(r.account_id) ?? undefined, token: nullableString(r.token) ?? undefined, base_url: nullableString(r.base_url) ?? undefined }
+}
+
+export async function bindWechatMember(input: { displayName?: string; account_id: string; token: string; base_url?: string }): Promise<WechatMemberView> {
+  const r = record(await request<unknown>('/api/knowledge/wechat/members', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }))
+  const member = record(r.member)
+  return {
+    id: string(member.id),
+    displayName: string(member.displayName),
+    accountId: string(member.accountId),
+    profileName: string(member.profileName),
+    boundAt: string(member.boundAt),
+    status: string(member.status, 'active'),
+    running: member.running === true,
+    homeDir: string(member.homeDir),
+  }
+}
+
+export async function unbindWechatMember(id: string, purge = false): Promise<void> {
+  await request<unknown>(`/api/knowledge/wechat/members/${encodeURIComponent(id)}?purge=${purge ? '1' : '0'}`, { method: 'DELETE' })
+}

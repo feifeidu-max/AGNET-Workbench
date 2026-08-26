@@ -14,6 +14,14 @@ import { useSettingsStore } from '@/stores/hermes/settings'
 import { fetchProfileRuntimeStatus, startProfileGateway, stopProfileGateway, restartProfileGateway } from '@/api/hermes/profiles'
 import type { ProfileRuntimeStatus } from '@/api/hermes/profiles'
 import { fetchWeixinQrCode, pollWeixinQrStatus, saveWeixinCredentials } from '@/api/hermes/config'
+import {
+  bindWechatMember,
+  fetchWechatMemberQr,
+  listWechatMembers,
+  pollWechatMemberQrStatus,
+  unbindWechatMember,
+  type WechatMemberView,
+} from '@/api/knowledge-workbench'
 
 const message = useMessage()
 const router = useRouter()
@@ -52,6 +60,108 @@ const weixinConfigured = computed(() => {
   const accountId = plat.extra?.account_id || w.extra?.account_id || wxAccountId.value
   return !!token && !!accountId
 })
+
+// --- 多成员接入状态 ---
+const members = ref<WechatMemberView[]>([])
+const memberMax = ref(10)
+const memberQrUrl = ref('')
+const memberQrId = ref('')
+const memberQrStatus = ref<'idle' | 'loading' | 'waiting' | 'scaned' | 'confirmed' | 'error'>('idle')
+const memberDisplayName = ref('')
+const memberBinding = ref(false)
+let memberPollTimer: ReturnType<typeof setTimeout> | null = null
+let memberListTimer: ReturnType<typeof setTimeout> | null = null
+
+async function loadMembers() {
+  try {
+    const data = await listWechatMembers()
+    members.value = data.members
+    memberMax.value = data.maxMembers
+  } catch { /* 静默：列表失败不阻塞工作台 */ }
+}
+
+async function startMemberQrLogin() {
+  memberQrStatus.value = 'loading'
+  memberQrUrl.value = ''
+  memberQrId.value = ''
+  if (memberPollTimer) clearTimeout(memberPollTimer)
+  try {
+    const data = await fetchWechatMemberQr()
+    memberQrId.value = data.qrcode
+    memberQrUrl.value = data.qrcode_url
+    memberQrStatus.value = 'waiting'
+    pollMemberQrStatus()
+  } catch (err: any) {
+    memberQrStatus.value = 'error'
+    message.error(err?.message || '获取成员二维码失败')
+  }
+}
+
+function pollMemberQrStatus() {
+  if (!memberQrId.value) return
+  memberPollTimer = setTimeout(async () => {
+    try {
+      const data = await pollWechatMemberQrStatus(memberQrId.value)
+      if (data.status === 'wait') { pollMemberQrStatus(); return }
+      if (data.status === 'scaned' || data.status === 'scaned_but_redirect') {
+        memberQrStatus.value = 'scaned'
+        pollMemberQrStatus()
+        return
+      }
+      if (data.status === 'expired') {
+        memberQrStatus.value = 'idle'
+        message.warning('成员二维码已过期，请重新获取')
+        return
+      }
+      if (data.status === 'confirmed' && data.account_id && data.token) {
+        memberQrStatus.value = 'confirmed'
+        memberBinding.value = true
+        try {
+          const member = await bindWechatMember({
+            displayName: memberDisplayName.value.trim() || undefined,
+            account_id: data.account_id,
+            token: data.token,
+            base_url: data.base_url || undefined,
+          })
+          message.success(`成员「${member.displayName}」已绑定，专属网关启动中`)
+          memberDisplayName.value = ''
+          memberQrUrl.value = ''
+          await loadMembers()
+          scheduleMemberListRefresh()
+        } finally {
+          memberBinding.value = false
+        }
+      }
+    } catch {
+      pollMemberQrStatus()
+    }
+  }, 2500)
+}
+
+function scheduleMemberListRefresh() {
+  // 网关进程启动需要数秒，轮询几次刷新 running 状态。
+  let ticks = 0
+  if (memberListTimer) clearInterval(memberListTimer)
+  memberListTimer = setInterval(async () => {
+    ticks += 1
+    await loadMembers()
+    if (ticks >= 6 || members.value.every(m => m.running || m.status !== 'active')) {
+      if (memberListTimer) clearInterval(memberListTimer)
+      memberListTimer = null
+    }
+  }, 3000)
+}
+
+async function handleUnbindMember(id: string) {
+  try {
+    await unbindWechatMember(id)
+    message.success('已解绑并停止其网关')
+    await loadMembers()
+  } catch (err: any) {
+    message.error(err?.message || '解绑失败')
+  }
+}
+
 const weixinTokenDisplay = computed(() => {
   const plat = (settingsStore.platforms as any)?.weixin || {}
   const w = (settingsStore.weixin as any) || {}
@@ -355,10 +465,15 @@ function goProfiles() { router.push({ name: 'hermes.profiles' }) }
 onMounted(() => {
   void loadSummary()
   void loadGateway()
+  void loadMembers()
   const p = settingsStore.fetchSettings().then(() => syncWeixinDraftsFromStore())
   void p
 })
-onUnmounted(() => stopWeixinPoll())
+onUnmounted(() => {
+  stopWeixinPoll()
+  if (memberPollTimer) { clearTimeout(memberPollTimer); memberPollTimer = null }
+  if (memberListTimer) { clearInterval(memberListTimer); memberListTimer = null }
+})
 </script>
 <template>
   <div class="workbench-page">
@@ -518,6 +633,40 @@ onUnmounted(() => stopWeixinPoll())
                   <span class="gw-hint" style="margin:0">保存后会自动重启 Gateway 使微信配置生效。</span>
                 </div>
                 <p v-if="weixinTokenDisplay || weixinAccountDisplay" class="wx-current">当前：Token {{ weixinTokenDisplay ? '••••' + weixinTokenDisplay.slice(-4) : '未设置' }} · Account {{ weixinAccountDisplay || '未设置' }}</p>
+              </div>
+
+              <div class="gw-divider"></div>
+
+              <!-- 多成员接入：每人扫码绑定专属 bot，独立会话共享知识库 -->
+              <div class="member-section">
+                <div class="wx-field-actions" style="justify-content: space-between">
+                  <b style="font-size:13px">多成员接入（{{ members.length }}/{{ memberMax }}）</b>
+                  <NButton type="primary" size="tiny" secondary :disabled="members.filter(m => m.status === 'active').length >= memberMax" :loading="memberQrStatus === 'loading' || memberBinding" @click="startMemberQrLogin">添加成员（扫码）</NButton>
+                </div>
+                <p class="gw-hint" style="margin:4px 0 8px">每个成员用<b>自己的微信</b>扫一次码，即获得专属机器人与独立会话（互不可见），并共享同一个知识库。无需加好友。</p>
+
+                <div v-if="memberQrUrl && memberQrStatus !== 'confirmed'" class="wx-qr-preview">
+                  <a :href="memberQrUrl" target="_blank" rel="noopener"><img :src="memberQrUrl" alt="成员扫码二维码" class="wx-qr-img" /></a>
+                  <p class="wx-qr-tip">请成员用手机微信扫码确认 · {{ memberQrStatus === 'scaned' ? '已扫码，等待确认…' : '等待扫码…' }}</p>
+                  <NInput v-model:value="memberDisplayName" size="small" placeholder="备注名（可选，如：张三）" style="max-width:220px; margin-top:6px" />
+                </div>
+
+                <div v-if="members.length" class="member-list">
+                  <div v-for="m in members" :key="m.id" class="member-row">
+                    <span class="member-dot" :class="m.status === 'active' && m.running ? 'on' : 'off'" />
+                    <b>{{ m.displayName }}</b>
+                    <code class="muted">{{ m.accountId.slice(0, 10) }}…</code>
+                    <NTag size="tiny" :bordered="false" :type="m.status === 'active' ? (m.running ? 'success' : 'warning') : 'default'">
+                      {{ m.status === 'revoked' ? '已解绑' : m.running ? '运行中' : '启动中/离线' }}
+                    </NTag>
+                    <span class="muted" style="font-size:11px">{{ m.boundAt.slice(0, 16).replace('T', ' ') }}</span>
+                    <NPopconfirm v-if="m.status === 'active'" @positive-click="handleUnbindMember(m.id)">
+                      <template #trigger><NButton size="tiny" type="error" quaternary>解绑</NButton></template>
+                      解绑「{{ m.displayName }}」？将停止其专属网关；聊天记录保留在其独立目录。
+                    </NPopconfirm>
+                  </div>
+                </div>
+                <p v-else class="gw-hint" style="margin:6px 0 0">还没有成员。点“添加成员（扫码）”邀请第一位同事接入。</p>
               </div>
 
               <div class="gw-help">
@@ -719,6 +868,21 @@ onUnmounted(() => stopWeixinPoll())
 .wx-label { font-size: 12px; color: $text-secondary; font-weight: 500; .muted{ font-weight:400; color:$text-muted; } }
 .wx-field-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wx-current { font-size: 12px; color: $text-muted; font-family: $font-code; margin: 0; }
+
+.member-section { display: block; }
+.member-list { display: grid; gap: 6px; margin-top: 8px; }
+.member-row {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 8px; padding: 7px 10px;
+  border: 1px solid $border-light; border-radius: $radius-sm;
+  background: var(--bg-secondary);
+  b { font-size: 13px; }
+}
+.member-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  &.on { background: #18a058; box-shadow: 0 0 4px rgba(24,160,88,.6); }
+  &.off { background: #f0a020; }
+}
 .gw-steps { margin-top: 16px; padding: 12px; border: 1px dashed $border-color; border-radius: 8px; background: var(--bg-secondary); }
 .gw-steps-title { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: $text-primary; }
 .gw-steps-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.7; color: $text-secondary; }
