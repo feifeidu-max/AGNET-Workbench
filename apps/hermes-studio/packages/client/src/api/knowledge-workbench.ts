@@ -480,6 +480,11 @@ export async function fetchKnowledgeEnrichStatus(): Promise<KnowledgeEnrichStatu
   return normalizeEnrichStatus(result)
 }
 
+export async function cancelKnowledgeEnrich(): Promise<KnowledgeEnrichStatus> {
+  const result = record(await request<unknown>('/api/knowledge/enrich/cancel', { method: 'POST', body: '{}' }))
+  return normalizeEnrichStatus(result)
+}
+
 export async function fetchKnowledgeEnrichInfo(): Promise<Record<string, unknown>> {
   return record(await request<unknown>('/api/knowledge/enrich'))
 }

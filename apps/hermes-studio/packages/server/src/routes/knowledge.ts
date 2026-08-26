@@ -403,6 +403,16 @@ knowledgeRoutes.post('/api/knowledge/enrich', async (ctx: Context) => {
   }
 })
 
+knowledgeRoutes.post('/api/knowledge/enrich/cancel', async (ctx: Context) => {
+  try {
+    ctx.body = await llmWikiJson('/projects/current/enrich/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }, 15_000)
+  } catch (error) { setProxyError(ctx, error) }
+})
+
 knowledgeRoutes.get('/api/knowledge/enrich/status', async (ctx: Context) => {
   try { ctx.body = await llmWikiJson('/projects/current/enrich/status') } catch (error) { setProxyError(ctx, error) }
 })

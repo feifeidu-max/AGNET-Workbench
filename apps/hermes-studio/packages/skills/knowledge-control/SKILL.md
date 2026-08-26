@@ -1,6 +1,6 @@
 ---
 name: knowledge-control
-description: "Full control over the AGNET local LLM Wiki knowledge base via Hermes Studio API (search/chat/import/modify). Use when the user wants to import a WeChat public article link, search or chat over personal knowledge, manage drafts/files, or let Hermes answer from trusted papers. Works on ALL profiles (default & research) through hermes_studio_api_* tools — universal knowledge plane for WeChat-linked Hermes."
+description: "Full control over the AGNET local LLM Wiki knowledge base via Hermes Studio API (search/chat/import/modify/approve/reject drafts). Use when the user wants to import a WeChat public article link, search or chat over personal knowledge, manage drafts/files, approve or reject ingestion (批准入库/拒绝入库/直接入库), or let Hermes answer from trusted papers. Works on ALL profiles (default & research) through hermes_studio_api_* tools — universal knowledge plane for WeChat-linked Hermes."
 version: 1.0.0
 author: Hermes
 license: MIT
@@ -21,10 +21,17 @@ prerequisites:
 
 本技能不依赖 llm-wiki MCP（该 MCP 仅在 research profile 可用），而是通过 Hermes Studio 随带 MCP 的 api 工具集：
 
+- hermes_studio_knowledge_draft_review — **草稿审核专用工具（优先使用）**：{action: "list"|"get"|"approve"|"reject", draft_id?, reason?}
 - hermes_studio_api_openapi_get — 先查接口手册
 - hermes_studio_api_request — 统一调用所有 Knowledge 平面接口
 
 因此：无论 Hermes 当前是 default 还是 research profile，微信消息都能触发本技能并真正控制知识库。
+
+## ⛔ 硬性规则（必须遵守）
+
+1. 用户说「批准 / 直接入库 / 同意收录」→ 必须调用 `hermes_studio_knowledge_draft_review { action: "approve", draft_id: "<id>" }`。**不存在任何“Workbench API 限制”导致无法批准的情况**——该工具就是为此而生。
+2. 用户说「拒绝 / 不要了 / 退回」→ 调用 `{ action: "reject", draft_id: "<id>", reason: "<原因>" }`。**严禁用 shell 命令（rm/rm -rf/del）删除 staging 目录**来“拒绝”，那会触发危险命令审批且绕过审核状态机。
+3. 不确定 draft_id 时先调 `{ action: "list" }` 获取待审队列。
 
 ---
 ## 何时使用
@@ -65,8 +72,9 @@ prerequisites:
    - 429 操作过于频繁 -> 告知 6 次/分限流
    - 502 微信返回环境验证页面 -> 提示该号被风控
 4. 向用户确认：已抓取《标题》并创建草稿（ID abcd1234），已进入审核队列。是否立即批准入库？回复“批准”“直接入库”即可，无需打开 LLM Wiki。
-5. 若用户确认批准（或原始指令已含 直接入库 / 立即发布 / 无需审核）：hermes_studio_api_request { method: "POST", path: "/api/knowledge/drafts/abcd1234/approve", body: {} } 成功后告知已批准入库 wiki/sources/<slug>.md，现已可被关键词检索。
-6. 可主动提供 GET /api/knowledge/drafts 列表或 GET /api/knowledge/summary 计数供复核。
+5. 若用户确认批准（或原始指令已含 直接入库 / 立即发布 / 无需审核）：**首选专用工具** `hermes_studio_knowledge_draft_review { action: "approve", draft_id: "abcd1234" }`（等价于 hermes_studio_api_request POST /api/knowledge/drafts/abcd1234/approve）。成功后告知已批准入库 wiki/sources/<slug>.md，现已可被关键词检索。
+6. 用户说「拒绝该文章入库」：`hermes_studio_knowledge_draft_review { action: "reject", draft_id: "abcd1234", reason: "用户拒绝" }`，并回复已拒绝对应草稿。
+7. 可主动提供 GET /api/knowledge/drafts 列表或 GET /api/knowledge/summary 计数供复核。
 
 ### 2) 关键词回应已入库论文/文章（全量感知）
 

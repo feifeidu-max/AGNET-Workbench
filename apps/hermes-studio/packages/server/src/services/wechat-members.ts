@@ -160,7 +160,7 @@ function summarizeActivity(home: string): MemberActivity {
 }
 
 function buildMemberConfigYaml(): Record<string, any> {
-  return {
+  const config: Record<string, any> = {
     model: {
       default: 'mimo-v2.5',
       provider: 'opencode-go',
@@ -181,6 +181,52 @@ function buildMemberConfigYaml(): Record<string, any> {
       reasoning_effort: process.env.WECHAT_MEMBER_REASONING_EFFORT || 'xhigh',
     },
   }
+
+  // 成员 Agent 也需要 Studio MCP（hermes_studio_knowledge_draft_review 等），
+  // 才能在微信里直接 批准/拒绝 知识库草稿。
+  const studioUrl =
+    process.env.HERMES_WEB_UI_URL ||
+    process.env.LLM_WIKI_STUDIO_URL ||
+    'http://127.0.0.1:8648'
+  const stateHome =
+    process.env.HERMES_WEB_UI_HOME ||
+    process.env.HERMES_WEBUI_STATE_DIR ||
+    join(process.env.USERPROFILE || process.env.HOME || '.', '.hermes-web-ui')
+  const mcpScript = findStudioMcpScript()
+  if (mcpScript) {
+    config.mcp_servers = {
+      'hermes-studio-api': {
+        command: process.env.NODE_EXECUTABLE?.trim() || 'node',
+        args: [mcpScript, 'api'],
+        env: {
+          HERMES_WEB_UI_URL: studioUrl,
+          HERMES_WEB_UI_HOME: stateHome,
+          HERMES_WEBUI_STATE_DIR: stateHome,
+          HERMES_WEB_UI_PROFILE: 'default',
+          HERMES_MCP_SERVER_NAME: 'hermes-studio-api',
+          HERMES_MCP_TOOLSET: 'api',
+          HERMES_WEB_UI_MANAGED_MCP: '1',
+        },
+        enabled: true,
+      },
+    }
+  } else {
+    logger.warn('[wechat-members] studio mcp script not found; member will lack knowledge tools')
+  }
+  return config
+}
+
+/** 从服务进程 cwd 向上寻找 bin/hermes-studio-mcp.mjs。 */
+function findStudioMcpScript(): string | null {
+  let dir = process.cwd()
+  for (let depth = 0; depth < 6; depth += 1) {
+    const candidate = join(dir, 'bin', 'hermes-studio-mcp.mjs')
+    if (existsSync(candidate)) return candidate
+    const parent = join(dir, '..')
+    if (parent === dir) break
+    dir = parent
+  }
+  return null
 }
 
 function buildMemberEnvLines(member: WechatMember, baseUrl?: string): string[] {
@@ -209,6 +255,20 @@ function buildMemberEnvLines(member: WechatMember, baseUrl?: string): string[] {
     push(key, process.env[key])
   }
   return lines
+}
+
+/** 从研究 profile 复制知识库技能（knowledge-control 等）到成员 home。 */
+async function copyKnowledgeSkills(memberHome: string): Promise<void> {
+  try {
+    const { cp, mkdir } = await import('fs/promises')
+    const srcSkills = join(getHermesBaseDir(), 'profiles', 'research', 'skills')
+    if (!existsSync(srcSkills)) return
+    const dstSkills = join(memberHome, 'skills')
+    await mkdir(dstSkills, { recursive: true })
+    await cp(srcSkills, dstSkills, { recursive: true, force: true })
+  } catch (err) {
+    logger.warn(err, '[wechat-members] copy skills failed (member will lack KB skill)')
+  }
 }
 
 export async function fetchQrcode(): Promise<{ qrcode: string; qrcode_url: string }> {
@@ -268,8 +328,9 @@ export async function bindMember(input: BindInput): Promise<WechatMember> {
   }
   const home = memberHomeDir(member)
 
-  // 1) 独立 hermes home：config.yaml + .env
+  // 1) 独立 hermes home：config.yaml + .env + 技能目录
   await safeFileStore.writeYaml(join(home, 'config.yaml'), buildMemberConfigYaml())
+  await copyKnowledgeSkills(home)
   // token 通过临时环境变量传递给 env 构建器，避免写入 JSON 存储。
   process.env.__MEMBER_TOKEN__ = trimmedToken
   try {

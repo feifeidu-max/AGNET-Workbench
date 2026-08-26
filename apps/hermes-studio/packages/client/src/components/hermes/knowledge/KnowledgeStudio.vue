@@ -61,6 +61,7 @@ import {
   updateKnowledgeReview,
   fetchKnowledgeEnrichStatus,
   triggerKnowledgeEnrich,
+  cancelKnowledgeEnrich,
   type KnowledgeChatMessage,
   type KnowledgeChatSession,
   type KnowledgeEnrichStatus,
@@ -723,6 +724,7 @@ function startEnrichPolling() {
       enrichPollTimer.value = null
       await loadGraph()
       if (enrichStatus.value?.phase === 'done') message.success('AI 语义增强已完成，图谱标签已更新')
+      if (enrichStatus.value?.phase === 'cancelled') message.info('语义增强已停止；已完成部分已保存')
       if (enrichStatus.value?.phase === 'failed') message.error(enrichStatus.value.lastError || '语义增强失败，请检查 LLM 配置')
     }
   }, 2500)
@@ -739,6 +741,16 @@ async function triggerEnrich() {
     message.error(error instanceof Error ? error.message : '启动语义增强失败')
   } finally {
     enrichLoading.value = false
+  }
+}
+
+async function stopEnrich() {
+  if (!enrichStatus.value?.running) return
+  try {
+    enrichStatus.value = await cancelKnowledgeEnrich()
+    message.info('已请求停止增强，正在等待当前页完成…')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '停止失败')
   }
 }
 
@@ -1066,6 +1078,7 @@ onMounted(async () => {
             </div>
             <div class="enrich-panel__actions">
               <NButton type="primary" secondary :loading="enrichLoading || enrichStatus?.running" @click="triggerEnrich">{{ enrichStatus?.running ? `增强中 ${enrichStatus.done}/${enrichStatus.total} (${enrichStatus.phase})` : 'AI 增强' }}</NButton>
+              <NButton v-if="enrichStatus?.running" size="small" type="error" secondary @click="stopEnrich">停止增强</NButton>
               <NButton size="small" text :disabled="!!enrichStatus?.running" @click="loadEnrichStatus(); loadGraph()">刷新状态</NButton>
             </div>
             <NProgress
@@ -1075,8 +1088,12 @@ onMounted(async () => {
               indicator-placement="inside"
               style="grid-column: 1 / -1"
             />
-            <NAlert v-if="enrichStatus?.running" type="info" class="enrich-progress">正在处理：{{ enrichStatus.current || '准备中' }} · 已完成 {{ enrichStatus.done }}/{{ enrichStatus.total }}，失败 {{ enrichStatus.failed }}</NAlert>
-            <NAlert v-if="enrichStatus?.lastError && !enrichStatus.running" type="warning" class="enrich-progress">{{ enrichStatus.lastError }}</NAlert>
+            <NAlert v-if="enrichStatus?.running" type="info" class="enrich-progress">
+              正在处理：{{ enrichStatus.current || '准备中' }} · 已完成 {{ enrichStatus.done }}/{{ enrichStatus.total }}，失败 {{ enrichStatus.failed }}
+              <template v-if="enrichStatus.failed > 0 && enrichStatus.lastError"><br /><small>最近错误：{{ enrichStatus.lastError }}</small></template>
+            </NAlert>
+            <NAlert v-if="enrichStatus?.phase === 'cancelled' && !enrichStatus.running" type="warning" class="enrich-progress">增强已被手动停止；已完成的部分已保存到覆盖层并生效。</NAlert>
+            <NAlert v-if="enrichStatus?.lastError && !enrichStatus.running && enrichStatus.phase !== 'cancelled'" type="warning" class="enrich-progress">{{ enrichStatus.lastError }}</NAlert>
           </section>
           <NAlert v-if="graphError" type="error" class="knowledge-studio__alert">{{ graphError }}</NAlert>
           <div class="graph-toolbar"><NInput v-model:value="graphFilter" placeholder="输入论文标题，保留匹配节点及其一跳邻居" /><NCheckbox v-model:checked="graphPaperOnly">仅看论文</NCheckbox><NTag :bordered="false">{{ filteredGraphNodes.length }} 节点 · {{ filteredGraphEdges.length }} 条图谱链接（含关键词相似 · LLM 增强优先）</NTag></div>

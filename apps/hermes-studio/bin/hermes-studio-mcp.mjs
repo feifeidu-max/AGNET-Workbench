@@ -826,6 +826,26 @@ const tools = [
       }, ['path']),
   },
   {
+    name: 'hermes_studio_knowledge_draft_review',
+    toolset: 'api',
+    description: 'Review knowledge-base ingestion drafts captured from WeChat articles or PDFs. action=list returns drafts awaiting review (id/title/summary); approve publishes a draft into the trusted wiki; reject discards it (optional reason). Always use this tool for 批准/拒绝入库 requests instead of shell commands.',
+    inputSchema: inputSchema({
+        action: {
+          type: 'string',
+          enum: ['list', 'get', 'approve', 'reject'],
+          description: 'Review operation to perform.',
+        },
+        draft_id: {
+          type: 'string',
+          description: 'Draft id from action=list. Required for get/approve/reject.',
+        },
+        reason: {
+          type: 'string',
+          description: 'Optional rejection reason for action=reject.',
+        },
+      }, ['action']),
+  },
+  {
     name: 'hermes_studio_use_chat_run',
     toolset: 'use',
     description: 'Start one user-requested Hermes Studio chat or coding-agent run through the HTTP bridge and wait for completion. Do not use this as an internal delegation or subtask mechanism.',
@@ -1490,6 +1510,25 @@ async function callTool(name, args = {}) {
         ...(method === 'GET' || method === 'HEAD' ? {} : { body: args.body }),
       })
       return jsonText(await requestEnvelope(path, options))
+    }
+    case 'hermes_studio_knowledge_draft_review': {
+      const action = String(args.action || '').toLowerCase()
+      if (action === 'list') {
+        return jsonText(await request('/api/knowledge/drafts', withAuthArgs(args)))
+      }
+      const draftId = args.draft_id ? encodeURIComponent(String(args.draft_id).trim()) : ''
+      if (!draftId) return errorText('draft_id is required for get/approve/reject. Call action=list first to obtain ids.')
+      if (action === 'get') {
+        return jsonText(await request(`/api/knowledge/drafts/${draftId}`, withAuthArgs(args)))
+      }
+      if (action === 'approve' || action === 'reject') {
+        const body = action === 'reject' && args.reason ? { reason: String(args.reason) } : {}
+        return jsonText(await request(`/api/knowledge/drafts/${draftId}/${action}`, withAuthArgs(args, {
+          method: 'POST',
+          body,
+        })))
+      }
+      return errorText('Invalid action. Allowed: list, get, approve, reject.')
     }
     case 'hermes_studio_use_chat_run':
       return jsonText(await request('/api/chat-run/runs', withAuthArgs(args, {

@@ -244,6 +244,38 @@ fn jobs() -> &'static Mutex<BTreeMap<String, EnrichJobStatus>> {
     JOBS.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
+/// 取消请求标记：按项目路径记录；任务循环在每个页面/批次之间检查。
+fn cancel_flags() -> &'static Mutex<BTreeSet<String>> {
+    static FLAGS: OnceLock<Mutex<BTreeSet<String>>> = OnceLock::new();
+    FLAGS.get_or_init(|| Mutex::new(BTreeSet::new()))
+}
+
+/// 请求取消当前项目的增强任务。返回 true 表示确有任务在跑。
+pub fn request_cancel(project_path: &str) -> bool {
+    if let Ok(mut flags) = cancel_flags().lock() {
+        flags.insert(job_key(project_path));
+    }
+    jobs()
+        .lock()
+        .ok()
+        .and_then(|jobs| jobs.get(&job_key(project_path)).cloned())
+        .map(|status| matches!(status.phase.as_str(), "pages" | "relations"))
+        .unwrap_or(false)
+}
+
+fn cancelled(project_path: &str) -> bool {
+    cancel_flags()
+        .lock()
+        .map(|flags| flags.contains(&job_key(project_path)))
+        .unwrap_or(false)
+}
+
+fn clear_cancel(project_path: &str) {
+    if let Ok(mut flags) = cancel_flags().lock() {
+        flags.remove(&job_key(project_path));
+    }
+}
+
 fn job_key(project_path: &str) -> String {
     normalize_path(project_path)
 }
@@ -311,6 +343,7 @@ pub fn start_enrichment(
     }
     let mut initial = EnrichJobStatus::new(&llm.provider, &llm.model);
     initial.phase = "pages".to_string();
+    clear_cancel(&project_path);
     if let Ok(mut jobs) = jobs().lock() {
         jobs.insert(key, initial);
     }
@@ -330,10 +363,12 @@ async fn run_enrichment_job(
     options: EnrichOptions,
 ) {
     let result = run_enrichment_inner(&project_path, &llm, &options).await;
+    let was_cancelled = cancelled(&project_path);
+    clear_cancel(&project_path);
     match result {
         Ok(()) => {
             update_job(&project_path, |job| {
-                job.phase = "done".to_string();
+                job.phase = if was_cancelled { "cancelled".to_string() } else { "done".to_string() };
                 job.current.clear();
                 job.finished_at = Some(now_millis());
             });
@@ -394,7 +429,12 @@ async fn run_enrichment_inner(
     });
 
     let mut enriched_ids = BTreeSet::new();
+    let mut was_cancelled = false;
     for page in &todo {
+        if cancelled(project_path) {
+            was_cancelled = true;
+            break;
+        }
         update_job(project_path, |job| {
             job.current = page.id.clone();
         });
@@ -421,12 +461,18 @@ async fn run_enrichment_inner(
     }
 
     // 阶段 B：文章间关系标签。
-    if include_relations {
+    if include_relations && !was_cancelled && !cancelled(project_path) {
         update_job(project_path, |job| {
             job.phase = "relations".to_string();
             job.current.clear();
         });
         label_relations(project_path, &client, &pages, &mut overlay, &enriched_ids).await?;
+    }
+
+    if was_cancelled || cancelled(project_path) {
+        overlay.updated_at = now_millis();
+        save_overlay(project_path, &overlay)?;
+        return Ok(());
     }
 
     overlay.updated_at = now_millis();
@@ -620,6 +666,9 @@ async fn label_relations(
     let mut relations = Vec::new();
     let mut processed = 0usize;
     for batch in pairs.chunks(RELATION_BATCH) {
+        if cancelled(project_path) {
+            return Ok(());
+        }
         let user = build_relation_prompt(batch, &overlay.pages);
         match llm_json_array(client, RELATION_SYSTEM_PROMPT, &user).await {
             Ok(items) => {

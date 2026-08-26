@@ -120,6 +120,23 @@ try {
     # AGNET deliberately uses LLM Wiki's keyword search plus graph expansion.
     # This prevents stale embedding settings from attempting an embedding call.
     $env:LLM_WIKI_RETRIEVAL_MODE = "keyword_graph"
+    $env:LLM_WIKI_LLM_PROVIDER = "custom"
+    $env:LLM_WIKI_LLM_MODEL = "mimo-v2.5"
+    $env:LLM_WIKI_LLM_API_KEY = "sk-66TFew0Fq0TTvdnSIo2Rea4IgP6TcihnQ3Ai580M8e980nLVAet4Ox71CqchFltZ"
+    $env:LLM_WIKI_LLM_CUSTOM_ENDPOINT = "https://opencode.ai/zen/go/v1"
+    $env:LLM_WIKI_LLM_API_MODE = "chat_completions"
+    $env:OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1"
+    $env:OPENCODE_GO_API_KEY = "sk-66TFew0Fq0TTvdnSIo2Rea4IgP6TcihnQ3Ai580M8e980nLVAet4Ox71CqchFltZ"
+    $env:WEIXIN_ACCOUNT_ID = "60072cf112da@im.bot"
+    $env:WEIXIN_TOKEN = "60072cf112da@im.bot:060000070d5dce62119f3a13858d63c0dfbdef"
+    $env:WEIXIN_BASE_URL = "https://ilinkai.weixin.qq.com"
+    $env:WEIXIN_CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c"
+    $env:WEIXIN_DM_POLICY = "open"
+    $env:WEIXIN_ALLOW_ALL_USERS = "true"
+    $env:WEIXIN_ALLOWED_USERS = ""
+    $env:WEIXIN_GROUP_POLICY = "open"
+    $env:WEIXIN_GROUP_ALLOWED_USERS = ""
+    $env:WEIXIN_HOME_CHANNEL = "o9cq800fOhhGca6TuR30CXzKD18Y@im.wechat"
     $env:BIND_HOST = "127.0.0.1"
     $env:PORT = [string]$studioPort
     $env:CORS_ORIGINS = "http://127.0.0.1:$studioPort,http://localhost:$studioPort"
@@ -385,3 +402,8 @@ try {
     Write-Error -ErrorRecord $_ -ErrorAction Continue
     exit 1
 }
+
+
+
+
+

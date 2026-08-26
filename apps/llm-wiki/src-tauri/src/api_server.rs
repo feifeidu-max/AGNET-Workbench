@@ -336,6 +336,9 @@ fn handle_request(
         (&Method::Post, ["projects", project_id, "enrich"]) => {
             handle_enrich_start(app, project_id, body_text)
         }
+        (&Method::Post, ["projects", project_id, "enrich", "cancel"]) => {
+            handle_enrich_cancel(app, project_id)
+        }
         (&Method::Get, ["projects", project_id, "enrich"]) => handle_enrich_info(app, project_id),
         (&Method::Get, ["projects", project_id, "enrich", "status"]) => {
             handle_enrich_status(app, project_id)
@@ -3599,6 +3602,21 @@ fn handle_enrich_start(app: &AppHandle, project_id: &str, body: &str) -> ApiResp
         }
         Err(error) => err(500, error),
     }
+}
+
+fn handle_enrich_cancel(app: &AppHandle, project_id: &str) -> ApiResponse {
+    let project = match resolve_project(app, project_id) {
+        Ok(project) => project,
+        Err(error) => return err(404, error),
+    };
+    let running = crate::llm_enrich::request_cancel(&project.path);
+    let mut status = crate::llm_enrich::job_status(&project.path);
+    if let Some(object) = status.as_object_mut() {
+        object.insert("ok".to_string(), json!(true));
+        object.insert("projectId".to_string(), json!(project.id));
+        object.insert("requested".to_string(), json!(running));
+    }
+    ok(status)
 }
 
 fn handle_enrich_status(app: &AppHandle, project_id: &str) -> ApiResponse {
