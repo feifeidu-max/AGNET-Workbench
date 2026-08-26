@@ -420,6 +420,10 @@ knowledgeRoutes.get('/api/knowledge/wechat/members', async (ctx: Context) => {
   try { ctx.body = await listMembers() } catch (error) { setProxyError(ctx, error) }
 })
 
+knowledgeRoutes.get('/api/knowledge/wechat/members/qr', async (ctx: Context) => {
+  try { ctx.body = await fetchQrcode() } catch (error) { setProxyError(ctx, error) }
+})
+
 knowledgeRoutes.post('/api/knowledge/wechat/members/qr', async (ctx: Context) => {
   try { ctx.body = await fetchQrcode() } catch (error) { setProxyError(ctx, error) }
 })
