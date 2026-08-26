@@ -70,7 +70,8 @@ const memberQrStatus = ref<'idle' | 'loading' | 'waiting' | 'scaned' | 'confirme
 const memberDisplayName = ref('')
 const memberBinding = ref(false)
 let memberPollTimer: ReturnType<typeof setTimeout> | null = null
-let memberListTimer: ReturnType<typeof setTimeout> | null = null
+let memberListTimer: ReturnType<typeof setInterval> | null = null
+let memberAutoTimer: ReturnType<typeof setInterval> | null = null
 
 async function loadMembers() {
   try {
@@ -78,6 +79,34 @@ async function loadMembers() {
     members.value = data.members
     memberMax.value = data.maxMembers
   } catch { /* 静默：列表失败不阻塞工作台 */ }
+}
+
+const visibleMembers = computed(() => members.value)
+const activeMemberCount = computed(() => members.value.filter(m => m.status === 'active' && m.running).length)
+function isMemberBusy(m: WechatMemberView): boolean {
+  return m.status === 'active' && (m.activity?.activeAgents ?? 0) > 0
+}
+function avatarText(name: string): string {
+  return (name || '?').trim().slice(0, 1).toUpperCase()
+}
+function memberStateType(m: WechatMemberView): 'success' | 'warning' | 'default' {
+  if (m.status !== 'active') return 'default'
+  return m.running ? 'success' : 'warning'
+}
+function memberStateText(m: WechatMemberView): string {
+  if (m.status !== 'active') return '已解绑'
+  return m.running ? '在线' : '启动中/离线'
+}
+function relativeActivity(m: WechatMemberView): string {
+  const iso = m.activity?.lastActivityAt
+  if (!iso) return '从未使用'
+  const ts = Date.parse(iso)
+  if (!Number.isFinite(ts)) return '未知'
+  const diff = Date.now() - ts
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
+  return `${Math.floor(diff / 86_400_000)} 天前`
 }
 
 async function startMemberQrLogin() {
@@ -466,6 +495,8 @@ onMounted(() => {
   void loadSummary()
   void loadGateway()
   void loadMembers()
+  // 成员在线/对话状态每 8 秒自动刷新。
+  memberAutoTimer = setInterval(() => { void loadMembers() }, 8000)
   const p = settingsStore.fetchSettings().then(() => syncWeixinDraftsFromStore())
   void p
 })
@@ -473,6 +504,7 @@ onUnmounted(() => {
   stopWeixinPoll()
   if (memberPollTimer) { clearTimeout(memberPollTimer); memberPollTimer = null }
   if (memberListTimer) { clearInterval(memberListTimer); memberListTimer = null }
+  if (memberAutoTimer) { clearInterval(memberAutoTimer); memberAutoTimer = null }
 })
 </script>
 <template>
@@ -640,10 +672,10 @@ onUnmounted(() => {
               <!-- 多成员接入：每人扫码绑定专属 bot，独立会话共享知识库 -->
               <div class="member-section">
                 <div class="wx-field-actions" style="justify-content: space-between">
-                  <b style="font-size:13px">多成员接入（{{ members.length }}/{{ memberMax }}）</b>
+                  <b style="font-size:13px">多成员接入（{{ activeMemberCount }}/{{ memberMax }} 在线）</b>
                   <NButton type="primary" size="tiny" secondary :disabled="members.filter(m => m.status === 'active').length >= memberMax" :loading="memberQrStatus === 'loading' || memberBinding" @click="startMemberQrLogin">添加成员（扫码）</NButton>
                 </div>
-                <p class="gw-hint" style="margin:4px 0 8px">每个成员用<b>自己的微信</b>扫一次码，即获得专属机器人与独立会话（互不可见），并共享同一个知识库。无需加好友。</p>
+                <p class="gw-hint" style="margin:4px 0 8px">每个成员用<b>自己的微信</b>扫一次码，即获得专属机器人与独立会话（互不可见），并共享同一个知识库。无需加好友。列表每 8 秒自动刷新。</p>
 
                 <div v-if="memberQrUrl && memberQrStatus !== 'confirmed'" class="wx-qr-preview">
                   <a :href="memberQrUrl" target="_blank" rel="noopener"><img :src="memberQrUrl" alt="成员扫码二维码" class="wx-qr-img" /></a>
@@ -651,19 +683,29 @@ onUnmounted(() => {
                   <NInput v-model:value="memberDisplayName" size="small" placeholder="备注名（可选，如：张三）" style="max-width:220px; margin-top:6px" />
                 </div>
 
-                <div v-if="members.length" class="member-list">
-                  <div v-for="m in members" :key="m.id" class="member-row">
-                    <span class="member-dot" :class="m.status === 'active' && m.running ? 'on' : 'off'" />
-                    <b>{{ m.displayName }}</b>
-                    <code class="muted">{{ m.accountId.slice(0, 10) }}…</code>
-                    <NTag size="tiny" :bordered="false" :type="m.status === 'active' ? (m.running ? 'success' : 'warning') : 'default'">
-                      {{ m.status === 'revoked' ? '已解绑' : m.running ? '运行中' : '启动中/离线' }}
-                    </NTag>
-                    <span class="muted" style="font-size:11px">{{ m.boundAt.slice(0, 16).replace('T', ' ') }}</span>
-                    <NPopconfirm v-if="m.status === 'active'" @positive-click="handleUnbindMember(m.id)">
-                      <template #trigger><NButton size="tiny" type="error" quaternary>解绑</NButton></template>
-                      解绑「{{ m.displayName }}」？将停止其专属网关；聊天记录保留在其独立目录。
-                    </NPopconfirm>
+                <div v-if="visibleMembers.length" class="member-grid">
+                  <div v-for="m in visibleMembers" :key="m.id" class="member-card" :class="{ 'is-busy': isMemberBusy(m), 'is-offline': m.status !== 'active' || !m.running }">
+                    <div class="member-card__head">
+                      <span class="member-avatar">{{ avatarText(m.displayName) }}</span>
+                      <div class="member-idbox">
+                        <b class="member-name">{{ m.displayName }}</b>
+                        <code class="member-account">{{ m.accountId.slice(0, 10) }}…</code>
+                      </div>
+                      <span v-if="isMemberBusy(m)" class="member-live"><i class="pulse-dot" />对话中</span>
+                      <NTag v-else size="tiny" :bordered="false" :type="memberStateType(m)">{{ memberStateText(m) }}</NTag>
+                    </div>
+                    <div class="member-card__meta">
+                      <span>最近活动：{{ relativeActivity(m) }}</span>
+                      <span v-if="m.activity?.lastEvent">· {{ m.activity.lastEvent === 'inbound' ? '收到消息' : '已回复' }}</span>
+                      <span v-if="m.activity?.activeAgents > 0">· {{ m.activity.activeAgents }} 个会话处理中</span>
+                    </div>
+                    <div class="member-card__foot">
+                      <span class="member-bound">绑定于 {{ m.boundAt.slice(0, 10) }}</span>
+                      <NPopconfirm v-if="m.status === 'active'" @positive-click="handleUnbindMember(m.id)">
+                        <template #trigger><NButton size="tiny" type="error" quaternary>解绑</NButton></template>
+                        解绑「{{ m.displayName }}」？将停止其专属网关；聊天记录保留在其独立目录。
+                      </NPopconfirm>
+                    </div>
                   </div>
                 </div>
                 <p v-else class="gw-hint" style="margin:6px 0 0">还没有成员。点“添加成员（扫码）”邀请第一位同事接入。</p>
@@ -870,18 +912,60 @@ onUnmounted(() => {
 .wx-current { font-size: 12px; color: $text-muted; font-family: $font-code; margin: 0; }
 
 .member-section { display: block; }
-.member-list { display: grid; gap: 6px; margin-top: 8px; }
-.member-row {
-  display: flex; align-items: center; flex-wrap: wrap;
-  gap: 8px; padding: 7px 10px;
-  border: 1px solid $border-light; border-radius: $radius-sm;
-  background: var(--bg-secondary);
-  b { font-size: 13px; }
+
+.member-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
 }
-.member-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-  &.on { background: #18a058; box-shadow: 0 0 4px rgba(24,160,88,.6); }
-  &.off { background: #f0a020; }
+.member-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid $border-light;
+  border-radius: $radius-sm;
+  background: var(--bg-primary);
+  transition: border-color .2s, box-shadow .2s;
+
+  &.is-busy {
+    border-color: #18a058;
+    box-shadow: 0 0 0 1px rgba(24,160,88,.25), 0 2px 10px rgba(24,160,88,.12);
+  }
+  &.is-offline { opacity: .62; }
+}
+.member-card__head { display: flex; align-items: center; gap: 9px; }
+.member-idbox { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.member-name { font-size: 13px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-account { font-size: 10px; color: $text-muted; font-family: $font-code; }
+.member-avatar {
+  width: 30px; height: 30px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: #E8EFF4; color: #003B5C;
+  font-weight: 700; font-size: 13px;
+}
+.member-live {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #18a058; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.pulse-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #18a058;
+  animation: member-pulse 1.4s ease-in-out infinite;
+}
+@keyframes member-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(24,160,88,.55); opacity: 1; }
+  50%      { box-shadow: 0 0 0 6px rgba(24,160,88,0);  opacity: .75; }
+}
+.member-card__meta {
+  display: flex; flex-wrap: wrap; gap: 3px 6px;
+  font-size: 11px; color: $text-secondary;
+}
+.member-card__foot {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: $text-muted;
 }
 .gw-steps { margin-top: 16px; padding: 12px; border: 1px dashed $border-color; border-radius: 8px; background: var(--bg-secondary); }
 .gw-steps-title { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: $text-primary; }

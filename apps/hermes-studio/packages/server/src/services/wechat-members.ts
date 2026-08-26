@@ -16,7 +16,7 @@
 
 import axios from 'axios'
 import { randomUUID } from 'crypto'
-import { existsSync } from 'fs'
+import { existsSync, statSync } from 'fs'
 import { join } from 'path'
 
 import { logger } from './logger'
@@ -98,6 +98,65 @@ function isMemberGatewayRunning(member: WechatMember): boolean {
   } catch {
     return false
   }
+}
+
+export interface MemberActivity {
+  /** Agent turns currently in flight (>0 = 正在对话中). */
+  activeAgents: number
+  /** ISO time of the latest inbound/reply log line, null when never used. */
+  lastActivityAt: string | null
+  /** 'inbound' | 'reply' — direction of the most recent event. */
+  lastEvent: 'inbound' | 'reply' | null
+}
+
+const LOG_TAIL_BYTES = 48 * 1024
+
+function summarizeActivity(home: string): MemberActivity {
+  const result: MemberActivity = { activeAgents: 0, lastActivityAt: null, lastEvent: null }
+  try {
+    const stateFile = join(home, 'gateway_state.json')
+    if (existsSync(stateFile)) {
+      const raw = JSON.parse(require('fs').readFileSync(stateFile, 'utf-8'))
+      result.activeAgents = Number(raw?.active_agents) || 0
+    }
+  } catch { /* keep defaults */ }
+  try {
+    const logFile = join(home, 'logs', 'gateway.log')
+    if (existsSync(logFile)) {
+      const stat = statSync(logFile)
+      if (!result.lastActivityAt && stat.mtime) {
+        // 网关日志的 mtime 即最近一次任何活动的兜底时间。
+        result.lastActivityAt = stat.mtime.toISOString()
+      }
+      const fd = require('fs').openSync(logFile, 'r')
+      try {
+        const size = require('fs').fstatSync(fd).size
+        const start = Math.max(0, size - LOG_TAIL_BYTES)
+        const buffer = Buffer.alloc(size - start)
+        require('fs').readSync(fd, buffer, 0, buffer.length, start)
+        const lines = buffer.toString('utf-8').split(/\r?\n/).reverse()
+        for (const line of lines) {
+          if (!result.lastEvent) {
+            if (/response ready:/.test(line)) {
+              result.lastEvent = 'reply'
+              const m = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/)
+              if (m) result.lastActivityAt = new Date(m[1].replace(' ', 'T') + '+08:00').toISOString()
+              break
+            }
+            if (/inbound from=/.test(line)) {
+              result.lastEvent = 'inbound'
+              const m = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/)
+              if (m) result.lastActivityAt = new Date(m[1].replace(' ', 'T') + '+08:00').toISOString()
+              break
+            }
+          }
+        }
+      } finally {
+        require('fs').closeSync(fd)
+      }
+    }
+  } catch { /* keep defaults */ }
+  return result
 }
 
 function buildMemberConfigYaml(): Record<string, any> {
@@ -241,17 +300,22 @@ export async function bindMember(input: BindInput): Promise<WechatMember> {
 export interface MemberView extends WechatMember {
   running: boolean
   homeDir: string
+  activity: MemberActivity
 }
 
 export async function listMembers(): Promise<{ maxMembers: number; members: MemberView[] }> {
   const store = await readStore()
   return {
     maxMembers: store.maxMembers,
-    members: store.members.map(member => ({
-      ...member,
-      running: member.status === 'active' && isMemberGatewayRunning(member),
-      homeDir: memberHomeDir(member),
-    })),
+    members: store.members.map(member => {
+      const running = member.status === 'active' && isMemberGatewayRunning(member)
+      return {
+        ...member,
+        running,
+        homeDir: memberHomeDir(member),
+        activity: summarizeActivity(memberHomeDir(member)),
+      }
+    }),
   }
 }
 

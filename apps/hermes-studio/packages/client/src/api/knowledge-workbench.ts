@@ -509,6 +509,12 @@ function normalizeEnrichStatus(value: Record<string, unknown>): KnowledgeEnrichS
   }
 }
 
+export interface WechatMemberActivity {
+  activeAgents: number
+  lastActivityAt: string | null
+  lastEvent: 'inbound' | 'reply' | null
+}
+
 export interface WechatMemberView {
   id: string
   displayName: string
@@ -518,6 +524,7 @@ export interface WechatMemberView {
   status: 'active' | 'revoked' | string
   running: boolean
   homeDir: string
+  activity: WechatMemberActivity
 }
 
 export async function listWechatMembers(): Promise<{ maxMembers: number; members: WechatMemberView[] }> {
@@ -527,6 +534,7 @@ export async function listWechatMembers(): Promise<{ maxMembers: number; members
     maxMembers: number(result.maxMembers, 10),
     members: rawMembers.map(item => {
       const m = record(item)
+      const activity = record(m.activity)
       return {
         id: string(m.id),
         displayName: string(m.displayName),
@@ -536,6 +544,11 @@ export async function listWechatMembers(): Promise<{ maxMembers: number; members
         status: string(m.status, 'active'),
         running: m.running === true,
         homeDir: string(m.homeDir),
+        activity: {
+          activeAgents: number(activity.activeAgents),
+          lastActivityAt: nullableString(activity.lastActivityAt),
+          lastEvent: (activity.lastEvent === 'inbound' || activity.lastEvent === 'reply') ? activity.lastEvent : null,
+        },
       }
     }),
   }
@@ -557,6 +570,7 @@ export async function bindWechatMember(input: { displayName?: string; account_id
     body: JSON.stringify(input),
   }))
   const member = record(r.member)
+  const activity = record(member.activity)
   return {
     id: string(member.id),
     displayName: string(member.displayName),
@@ -566,6 +580,11 @@ export async function bindWechatMember(input: { displayName?: string; account_id
     status: string(member.status, 'active'),
     running: member.running === true,
     homeDir: string(member.homeDir),
+    activity: {
+      activeAgents: number(activity.activeAgents),
+      lastActivityAt: nullableString(activity.lastActivityAt),
+      lastEvent: (activity.lastEvent === 'inbound' || activity.lastEvent === 'reply') ? activity.lastEvent : null,
+    },
   }
 }
 
