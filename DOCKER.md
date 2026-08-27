@@ -56,6 +56,14 @@ docker compose --profile kb logs -f llm-wiki
 | WIKI_PORT | 知识库暴露端口 | 19828 |
 | WIKI_DATA_DIR | 知识库数据卷（挂载到容器 HOME） | ./wiki_data |
 | LLM_WIKI_API_TOKEN | WebUI 与知识库共享令牌（**务必修改**） | change-me-in-prod |
+| LLM_WIKI_LLM_PROVIDER | 知识库富化模型提供方 | custom |
+| LLM_WIKI_LLM_MODEL | 富化/重排模型 | mimo-v2.5 |
+| LLM_WIKI_LLM_API_KEY | 富化模型 Key | — |
+| LLM_WIKI_LLM_CUSTOM_ENDPOINT | 富化模型 endpoint | https://opencode.ai/zen/go/v1 |
+| LLM_WIKI_LLM_MAX_TOKENS | 富化单次最大 tokens | 65536 |
+| OPENCODE_GO_API_KEY | Hermes 对话模型 Key（与富化共用） | — |
+| HTTP_PROXY / HTTPS_PROXY | 需代理访问外网时（如 Clash 7897） | — |
+| NO_PROXY | 本机直连白名单 | 127.0.0.1,localhost,::1 |
 | WEBUI_IMAGE / WIKI_IMAGE | 自定义镜像名 | — |
 
 ## 5. 数据持久化

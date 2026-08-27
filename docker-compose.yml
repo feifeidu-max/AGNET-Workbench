@@ -36,6 +36,13 @@ services:
       - HERMES_WEB_UI_XAI_CALLBACK_BIND_HOST=0.0.0.0
       - HERMES_ALLOW_ROOT_GATEWAY=1
       - PATH=/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      # --- 模型与代理（与 LLM Wiki 富化共用）---
+      - OPENCODE_GO_API_KEY=${OPENCODE_GO_API_KEY:-}
+      - OPENCODE_GO_BASE_URL=${OPENCODE_GO_BASE_URL:-https://opencode.ai/zen/go/v1}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-127.0.0.1,localhost,::1}
+      - no_proxy=${NO_PROXY:-127.0.0.1,localhost,::1}
       # --- 连接 LLM Wiki（容器网络）---
       - LLM_WIKI_ALLOW_REMOTE=1
       - LLM_WIKI_BASE_URL=http://llm-wiki:19828/api/v1
@@ -57,11 +64,16 @@ services:
       - LLM_WIKI_HEADLESS=1
       - LLM_WIKI_BIND_HOST=0.0.0.0
       - LLM_WIKI_API_TOKEN=${LLM_WIKI_API_TOKEN:-change-me-in-prod}
-      - LLM_WIKI_LLM_PROVIDER=${LLM_WIKI_LLM_PROVIDER:-}
+      - LLM_WIKI_LLM_PROVIDER=${LLM_WIKI_LLM_PROVIDER:-custom}
       - LLM_WIKI_LLM_API_KEY=${LLM_WIKI_LLM_API_KEY:-}
-      - LLM_WIKI_LLM_MODEL=${LLM_WIKI_LLM_MODEL:-}
-      - LLM_WIKI_LLM_CUSTOM_ENDPOINT=${LLM_WIKI_LLM_CUSTOM_ENDPOINT:-}
+      - LLM_WIKI_LLM_MODEL=${LLM_WIKI_LLM_MODEL:-mimo-v2.5}
+      - LLM_WIKI_LLM_CUSTOM_ENDPOINT=${LLM_WIKI_LLM_CUSTOM_ENDPOINT:-https://opencode.ai/zen/go/v1}
+      - LLM_WIKI_LLM_MAX_TOKENS=${LLM_WIKI_LLM_MAX_TOKENS:-65536}
       - LLM_WIKI_LLM_OLLAMA_URL=${LLM_WIKI_LLM_OLLAMA_URL:-}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-127.0.0.1,localhost,::1}
+      - no_proxy=${NO_PROXY:-127.0.0.1,localhost,::1}
       - RUST_BACKTRACE=1
     ports:
       - "${WIKI_PORT:-19828}:19828"
