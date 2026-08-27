@@ -128,8 +128,28 @@ impl AgentLlmProvider for LlmClient {
 
 impl LlmClient {
     pub fn new(config: LlmConfig) -> Result<Self, String> {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        let mut builder = reqwest::Client::builder()
+            .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS));
+        // Windows 上 reqwest 的默认环境代理探测不可靠，这里显式应用
+        // HTTPS_PROXY/HTTP_PROXY（Clash 等本地代理场景），让外部端点可达。
+        let proxy_url = std::env::var("HTTPS_PROXY")
+            .or_else(|_| std::env::var("https_proxy"))
+            .or_else(|_| std::env::var("HTTP_PROXY"))
+            .or_else(|_| std::env::var("http_proxy"))
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        if let Some(proxy_url) = proxy_url {
+            match reqwest::Proxy::all(&proxy_url) {
+                Ok(proxy) => {
+                    builder = builder.proxy(proxy);
+                }
+                Err(err) => {
+                    eprintln!("[LlmClient] invalid proxy '{proxy_url}': {err}");
+                }
+            }
+        }
+        let client = builder
             .build()
             .map_err(|err| format!("Failed to build LLM HTTP client: {err}"))?;
         Ok(Self { config, client })

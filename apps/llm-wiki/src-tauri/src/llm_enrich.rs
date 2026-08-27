@@ -1067,7 +1067,27 @@ async fn llm_json_array(
     let text = client.generate_text(system, user, &[]).await?;
     match parse_loose_json(&text, '[', ']') {
         Some(Value::Array(items)) => Ok(items),
-        Some(other) => Ok(vec![other]),
+        Some(Value::Object(map)) => {
+            // 部分模型无视指令，把数组包进对象（如 {"relations": [...]}）。
+            for key in ["data", "items", "results", "list", "relations", "pairs", "verdicts", "output"] {
+                if let Some(Value::Array(items)) = map.get(key) {
+                    return Ok(items.clone());
+                }
+            }
+            for value in map.values() {
+                if let Value::Array(items) = value {
+                    return Ok(items.clone());
+                }
+            }
+            Err(format!(
+                "模型输出是对象但没有可用的数组字段: {}",
+                truncate_str(&text, 160)
+            ))
+        }
+        Some(_) => Err(format!(
+            "模型输出不是有效 JSON 数组: {}",
+            truncate_str(&text, 160)
+        )),
         None => Err(format!(
             "模型输出不是有效 JSON 数组: {}",
             truncate_str(&text, 160)
