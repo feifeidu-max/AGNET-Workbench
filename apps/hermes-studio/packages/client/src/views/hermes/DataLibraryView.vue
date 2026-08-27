@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { NPopconfirm, useMessage } from 'naive-ui'
+import { NPopconfirm, NPagination, useMessage } from 'naive-ui'
 import { deleteKnowledgeFile, fetchKnowledgeFile } from '@/api/knowledge-workbench'
 import {
   fetchKnowledgeGraph,
@@ -65,6 +65,26 @@ const sortBy = ref<'newest' | 'oldest'>('newest')
 const selectedId = ref<string | null>(null)
 
 const favorites = ref<Set<string>>(new Set())
+
+const pageSize = ref(9)
+const currentPage = ref(1)
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
+const paginatedFiltered = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch([searchText, activeCategory, activeSource, activeTopic, sortBy], () => {
+  currentPage.value = 1
+})
+
+function handlePageSizeChange(val: number) {
+  pageSize.value = val
+  currentPage.value = 1
+}
+function handlePageChange() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 
 const PALETTE = [
   { bg: '#E8EFF4', fg: '#003B5C' },
@@ -607,9 +627,9 @@ onMounted(() => {
         <p v-if="refreshMessage" class="ph-refresh-message" :class="{ 'is-error': refreshError }">{{ refreshMessage }}</p>
 
         <div class="ph-card-grid">
-          <div v-for="row in Math.ceil(filtered.length / 3)" :key="row" class="ph-card-row">
+          <div v-for="row in Math.ceil(paginatedFiltered.length / 3)" :key="row" class="ph-card-row">
             <article
-              v-for="item in filtered.slice((row - 1) * 3, row * 3)"
+              v-for="item in paginatedFiltered.slice((row - 1) * 3, row * 3)"
               :key="item.id"
               class="ph-paper-card"
               :class="{ 'is-kb': item.source === 'kb' }"
@@ -674,6 +694,19 @@ onMounted(() => {
                 </NPopconfirm>
               </div>
             </article>
+          </div>
+          <div v-if="filtered.length > pageSize" class="ph-pagination-wrap">
+            <NPagination
+              v-model:page="currentPage"
+              :page-count="totalPages"
+              :page-size="pageSize"
+              :item-count="filtered.length"
+              show-size-picker
+              :page-sizes="[9, 12, 18, 24]"
+              @update:page-size="handlePageSizeChange"
+              @update:page="handlePageChange"
+            />
+            <span class="ph-pagination-info">共 {{ filtered.length }} 篇 · 第 {{ currentPage }} / {{ totalPages }} 页</span>
           </div>
         </div>
       </template>
@@ -1485,6 +1518,21 @@ html.dark .ph-service-detail {
 .ph-found-at {
   color: #e65100;
   font-weight: 500;
+}
+
+.ph-pagination-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 16px 0;
+  flex-wrap: wrap;
+}
+.ph-pagination-info {
+  font-size: 13px;
+  color: var(--ph-text-light);
+  white-space: nowrap;
 }
 
 /* ===== 删除已入库论文/文章按钮 ===== */
