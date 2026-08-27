@@ -248,6 +248,12 @@ function buildMemberEnvLines(member: WechatMember, baseUrl?: string): string[] {
   // 与主 bot 一致：开放私聊，任何加到该 bot 的人可直接对话（即本人）。
   push('WEIXIN_DM_POLICY', 'open')
   push('WEIXIN_ALLOW_ALL_USERS', 'true')
+  // 成员网关需走本机 Clash 代理才能连通 iLink，外网直连在部分网络下会 ssl 失败
+  const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy || 'http://127.0.0.1:7897'
+  push('HTTPS_PROXY', proxy)
+  push('HTTP_PROXY', proxy)
+  push('NO_PROXY', '127.0.0.1,localhost,::1')
+  push('no_proxy', '127.0.0.1,localhost,::1')
   // 模型凭据与知识库共享：成员 Agent 调同一套本地服务。
   push('OPENCODE_GO_API_KEY', process.env.OPENCODE_GO_API_KEY)
   for (const key of [
@@ -320,6 +326,10 @@ export async function bindMember(input: BindInput): Promise<WechatMember> {
   const activeCount = store.members.filter(m => m.status === 'active').length
   if (store.maxMembers > 0 && activeCount >= store.maxMembers) {
     throw new Error(`成员数已达上限（${store.maxMembers}），请先解绑部分成员`)
+  }
+  const dup = store.members.find(m => m.status === 'active' && m.accountId === accountId)
+  if (dup) {
+    throw new Error(`该微信账号已绑定为成员“${dup.displayName}”，无需重复添加`)
   }
 
   const id = randomUUID().replace(/-/g, '').slice(0, 8)
