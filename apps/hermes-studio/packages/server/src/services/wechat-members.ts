@@ -29,7 +29,7 @@ import {
 
 const ILINK_BASE = 'https://ilinkai.weixin.qq.com'
 const ILINK_CDN_DEFAULT = 'https://novac2c.cdn.weixin.qq.com/c2c'
-export const WECHAT_MEMBERS_MAX = 10
+export const WECHAT_MEMBERS_MAX = 0 // 0 = 无限制（仅受系统资源限制）
 
 interface WechatMember {
   id: string
@@ -60,6 +60,11 @@ async function readStore(): Promise<MemberStore> {
     const raw = await safeFileStore.readText(storePath())
     const parsed = JSON.parse(raw) as MemberStore
     if (!Array.isArray(parsed.members)) throw new Error('bad shape')
+    // 旧版上限 10 现改为无限制，自动迁移
+    if (parsed.maxMembers === 10) {
+      parsed.maxMembers = 0
+      writeStore(parsed).catch(() => {})
+    }
     return parsed
   } catch {
     return { version: 1, maxMembers: WECHAT_MEMBERS_MAX, members: [] }
@@ -313,7 +318,7 @@ export async function bindMember(input: BindInput): Promise<WechatMember> {
 
   const store = await readStore()
   const activeCount = store.members.filter(m => m.status === 'active').length
-  if (activeCount >= store.maxMembers) {
+  if (store.maxMembers > 0 && activeCount >= store.maxMembers) {
     throw new Error(`成员数已达上限（${store.maxMembers}），请先解绑部分成员`)
   }
 

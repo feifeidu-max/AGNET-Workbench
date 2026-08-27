@@ -63,7 +63,7 @@ const weixinConfigured = computed(() => {
 
 // --- 多成员接入状态 ---
 const members = ref<WechatMemberView[]>([])
-const memberMax = ref(10)
+const memberMax = ref(0) // 0 = 无限制
 const memberQrUrl = ref('')
 const memberQrId = ref('')
 const memberQrStatus = ref<'idle' | 'loading' | 'waiting' | 'scaned' | 'confirmed' | 'error'>('idle')
@@ -672,8 +672,8 @@ onUnmounted(() => {
               <!-- 多成员接入：每人扫码绑定专属 bot，独立会话共享知识库 -->
               <div class="member-section">
                 <div class="wx-field-actions" style="justify-content: space-between">
-                  <b style="font-size:13px">多成员接入（{{ activeMemberCount }}/{{ memberMax }} 在线）</b>
-                  <NButton type="primary" size="tiny" secondary :disabled="members.filter(m => m.status === 'active').length >= memberMax" :loading="memberQrStatus === 'loading' || memberBinding" @click="startMemberQrLogin">添加成员（扫码）</NButton>
+                  <b style="font-size:13px">多成员接入（{{ activeMemberCount }}/{{ memberMax > 0 ? memberMax : '∞' }} 在线）</b>
+                  <NButton type="primary" size="tiny" secondary :disabled="memberMax > 0 && members.filter(m => m.status === 'active').length >= memberMax" :loading="memberQrStatus === 'loading' || memberBinding" @click="startMemberQrLogin">添加成员（扫码）</NButton>
                 </div>
                 <p class="gw-hint" style="margin:4px 0 8px">每个成员用<b>自己的微信</b>扫一次码，即获得专属机器人与独立会话（互不可见），并共享同一个知识库。无需加好友。列表每 8 秒自动刷新。</p>
 
