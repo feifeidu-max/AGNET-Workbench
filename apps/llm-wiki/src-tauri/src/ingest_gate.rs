@@ -262,10 +262,11 @@ fn native_compile_enabled() -> bool {
     std::env::var("LLM_WIKI_NATIVE_COMPILE").as_deref() == Ok("1")
 }
 
-/// 发布前语义增强的显式开关。默认开启；`LLM_WIKI_INGEST_ENRICHMENT=0`
-/// 时跳过增强直接进入审核（无图谱语义关系的降级形态，也用于单元测试）。
+/// 发布前语义增强的可选开关，默认关闭：generated 草稿（微信导入等）直接走
+/// 简单流程进入审核，语义富化由用户手动触发（知识页「AI 语义增强」）。
+/// 设 `LLM_WIKI_INGEST_ENRICHMENT=1` 时，草稿在进入审核前自动完成富化。
 fn ingest_enrichment_enabled() -> bool {
-    std::env::var("LLM_WIKI_INGEST_ENRICHMENT").as_deref() != Ok("0")
+    std::env::var("LLM_WIKI_INGEST_ENRICHMENT").as_deref() == Ok("1")
 }
 
 fn gate_lock() -> Result<std::sync::MutexGuard<'static, ()>, GateError> {
@@ -1218,28 +1219,23 @@ fn process_draft(project_path: String, draft_id: String) {
                 .cloned()
                 .ok_or_else(|| GateError::new(409, "Generated proposal has no changes"))?;
 
-            {
-                let _guard = gate_lock()?;
-                let mut draft = read_draft(&project_path, &draft_id)?;
-                if draft.status == DraftStatus::Rejected {
-                    return Ok(());
+            // 发布前离线语义增强是可选能力（LLM_WIKI_INGEST_ENRICHMENT=1 显式
+            // 开启）；默认走简单流程，generated 提案直接进入审核，语义富化由
+            // 用户在知识页手动触发。显式开启后增强失败时草稿进入 failed，
+            // 绝不跳过该步骤直接进入审核。
+            let enrichment_status = if ingest_enrichment_enabled() {
+                {
+                    let _guard = gate_lock()?;
+                    let mut draft = read_draft(&project_path, &draft_id)?;
+                    if draft.status == DraftStatus::Rejected {
+                        return Ok(());
+                    }
+                    draft.status = DraftStatus::Drafting;
+                    draft.draft_mode = "generated_semantic_enrichment".to_string();
+                    draft.error = None;
+                    draft.updated_at = now();
+                    write_draft(&project_path, &draft)?;
                 }
-                draft.status = DraftStatus::Drafting;
-                draft.draft_mode = "generated_semantic_enrichment".to_string();
-                draft.error = None;
-                draft.updated_at = now();
-                write_draft(&project_path, &draft)?;
-            }
-
-            // 发布前必须走完离线语义增强（摘要/主题/标签/实体抽取 + 与库内
-            // 文章的关系标注），否则发布后的页面无法参与知识图谱。增强失败时
-            // 草稿进入 failed，绝不跳过该步骤直接进入审核。
-            let enrichment_status = if !ingest_enrichment_enabled() {
-                eprintln!(
-                    "[ingest-gate] generated draft {draft_id}: LLM_WIKI_INGEST_ENRICHMENT=0，跳过发布前语义增强"
-                );
-                "disabled".to_string()
-            } else {
                 match crate::api_server::backend_llm_config() {
                     Some(config) => {
                         run_generated_enrichment(&project_path, &draft_id, change, &config)?
@@ -1251,6 +1247,11 @@ fn process_draft(project_path: String, draft_id: String) {
                         "skipped_no_llm".to_string()
                     }
                 }
+            } else {
+                eprintln!(
+                    "[ingest-gate] generated draft {draft_id}: 简单流程入库（LLM_WIKI_INGEST_ENRICHMENT 未开启）"
+                );
+                "disabled".to_string()
             };
 
             let _guard = gate_lock()?;

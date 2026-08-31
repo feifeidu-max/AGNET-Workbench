@@ -822,9 +822,11 @@ knowledgeRoutes.post('/api/knowledge/generated-drafts', async (ctx: Context) => 
 /**
  * Single-link WeChat article import via the same strict gate as PDF.
  * The link is fetched server-side, scored, de-duplicated and written as a
- * generated draft behind the review workflow — never directly as a trusted
- * wiki page. Exposed under /api/knowledge so the KnowledgeStudio BFF can
- * share auth/timeouts/error shapes with the rest of the wiki plane.
+ * generated draft behind the review workflow; the importer's link message is
+ * the review decision, so the draft is auto-approved (published as trusted)
+ * once the gate finishes processing. Exposed under /api/knowledge so the
+ * KnowledgeStudio BFF can share auth/timeouts/error shapes with the rest of
+ * the wiki plane.
  */
 const WECHAT_KNOWLEDGE_RATE = new Map<string, number[]>()
 function allowWechatKnowledgeLink(ip: string): boolean {
@@ -854,7 +856,14 @@ knowledgeRoutes.post('/api/knowledge/wechat-import', async (ctx: Context) => {
     const { importWechatArticleLink } = await import('../services/wechat-article-sync')
     const result = await importWechatArticleLink(rawUrl, sourceName)
     ctx.status = 201
-    ctx.body = { draftId: result.draftId, title: result.title, url: result.url }
+    ctx.body = {
+      draftId: result.draftId,
+      title: result.title,
+      url: result.url,
+      approved: result.approved,
+      publishedPath: result.publishedPath,
+      note: result.note,
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const isBadRequest = /仅支持|请输入合法|未提取到|相关度不足|已导入过|验证页/.test(message)

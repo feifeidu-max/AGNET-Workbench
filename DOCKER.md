@@ -61,7 +61,7 @@ docker compose --profile kb logs -f llm-wiki
 | LLM_WIKI_LLM_API_KEY | 富化模型 Key | — |
 | LLM_WIKI_LLM_CUSTOM_ENDPOINT | 富化模型 endpoint | https://opencode.ai/zen/go/v1 |
 | LLM_WIKI_LLM_MAX_TOKENS | 富化单次最大 tokens | 65536 |
-| LLM_WIKI_INGEST_ENRICHMENT | 微信/生成类草稿批准入库前的离线语义增强开关（0 关闭） | 1（开启） |
+| LLM_WIKI_INGEST_ENRICHMENT | 可选：微信/生成类草稿批准入库前的自动离线语义增强（设 1 开启） | 0（默认关闭，富化请在知识页手动触发 AI 增强） |
 | OPENCODE_GO_API_KEY | Hermes 对话模型 Key（与富化共用） | — |
 | HTTP_PROXY / HTTPS_PROXY | 需代理访问外网时（如 Clash 7897） | — |
 | NO_PROXY | 本机直连白名单 | 127.0.0.1,localhost,::1 |

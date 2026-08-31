@@ -524,6 +524,70 @@ async function createDraft(article: ArticleRecord, source: WechatSource): Promis
   }, 30_000)
 }
 
+const AUTO_APPROVE_POLL_INTERVAL_MS = 1_000
+const AUTO_APPROVE_TIMEOUT_MS = 120_000
+
+export interface WechatImportResult {
+  draftId: string
+  title: string
+  url: string
+  /** true：草稿已代为批准并发布为可信知识（用户发链接导入即视为审核决定）。 */
+  approved: boolean
+  /** 发布后的 wiki 页面路径（approved 时返回）。 */
+  publishedPath?: string
+  /** 未能自动入库时的原因与后续操作提示。 */
+  note?: string
+}
+
+/**
+ * Poll the strict gate until the draft finishes processing, then approve it on
+ * the importer's behalf. A user-initiated single-link import already IS the
+ * review decision (the user chose the article), so it must not wait for a
+ * second manual confirmation. Discovery/scheduled imports keep the human
+ * review queue.
+ */
+async function approveDraftWhenReady(
+  draftId: string,
+): Promise<{ approved: boolean; publishedPath?: string; note?: string }> {
+  const deadline = Date.now() + AUTO_APPROVE_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    let detail: { draft?: { status?: string; error?: string | null } }
+    try {
+      detail = await llmWikiJson(`/projects/current/ingest-drafts/${encodeURIComponent(draftId)}`)
+    } catch (error) {
+      return { approved: false, note: `无法查询草稿状态：${publicKnowledgeErrorMessage(error)}` }
+    }
+    const status = detail.draft?.status
+    if (status === 'awaiting_review') {
+      try {
+        const approved = await llmWikiJson<{ draft?: { publishedPages?: string[] } }>(
+          `/projects/current/ingest-drafts/${encodeURIComponent(draftId)}/approve`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          },
+          30_000,
+        )
+        return { approved: true, publishedPath: approved.draft?.publishedPages?.[0] }
+      } catch (error) {
+        return {
+          approved: false,
+          note: `自动入库失败，请稍后在审核队列回复“批准”：${publicKnowledgeErrorMessage(error)}`,
+        }
+      }
+    }
+    if (status === 'failed') {
+      return { approved: false, note: `草稿处理失败：${detail.draft?.error ?? '未知原因'}` }
+    }
+    if (status === 'rejected') {
+      return { approved: false, note: '草稿已被拒绝' }
+    }
+    await new Promise((resolve) => setTimeout(resolve, AUTO_APPROVE_POLL_INTERVAL_MS))
+  }
+  return { approved: false, note: '草稿仍在处理中，请稍后回复“批准”完成入库' }
+}
+
 function discoverySource(item: DiscoveredWechatArticle, url: string): WechatSource {
   const hostname = new URL(url).hostname
   const now = new Date().toISOString()
@@ -566,7 +630,7 @@ function normalizeDiscoveredArticle(value: unknown): DiscoveredWechatArticle | n
 export async function importWechatArticleLink(
   rawUrl: unknown,
   rawSourceName?: unknown,
-): Promise<{ draftId: string; title: string; url: string }> {
+): Promise<WechatImportResult> {
   const normalized = normalizeUrl(typeof rawUrl === 'string' ? rawUrl.trim() : '')
   if (!normalized) throw new Error('请输入合法的文章链接')
   const candidate = normalizeDiscoveredArticle({ url: normalized, sourceName: typeof rawSourceName === 'string' ? rawSourceName : undefined })
@@ -582,8 +646,8 @@ export async function importWechatArticleLink(
     throw new Error('该文章已导入过（URL 或内容去重命中）')
   }
   // Single-link import is intentionally open: every successfully extracted
-  // article enters the strict draft gate and the reviewer decides. Keep the
-  // score only for provenance / sorting, never as a hard rejection.
+  // article enters the strict draft gate. The importer's link message is the
+  // review decision, so the draft is auto-approved once the gate is done.
   await createDraft(article, source)
   state.seen.push({ url: article.url, contentHash: article.hash, title: article.title, importedAt: new Date().toISOString() })
   state.seen = state.seen.slice(-500)
@@ -599,10 +663,17 @@ export async function importWechatArticleLink(
       drafts.find((d) => String(d.sha256 ?? '') === article.hash) ??
       drafts.find((d) => String(d.paperTitle ?? d.title ?? '') === article.title)
     if (match && typeof match.id === 'string') {
-      return { draftId: match.id, title: article.title, url: article.url }
+      const verdict = await approveDraftWhenReady(match.id)
+      return { draftId: match.id, title: article.title, url: article.url, ...verdict }
     }
-  } catch { /* draft was still created; caller only needs confirmation */ }
-  return { draftId: article.hash.slice(0, 16), title: article.title, url: article.url }
+  } catch { /* draft was still created; fall through to the manual queue note */ }
+  return {
+    draftId: article.hash.slice(0, 16),
+    title: article.title,
+    url: article.url,
+    approved: false,
+    note: '未能定位草稿 ID，请在审核队列中手动批准',
+  }
 }
 
 /**

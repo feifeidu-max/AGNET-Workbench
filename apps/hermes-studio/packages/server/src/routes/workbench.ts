@@ -15,10 +15,12 @@ import { recordWechatDiscoveryRun } from '../services/wechat-article-discovery-j
 
 export const workbenchRoutes = new Router()
 
-// Single-link WeChat import: paste one mp.weixin.qq.com/s/... URL and
-// create a strict draft behind the same generated-drafts gate as PDF import.
+// Single-link WeChat import: paste one mp.weixin.qq.com/s/... URL and it is
+// published as trusted knowledge behind the same generated-drafts gate as PDF
+// import — the importer's link message is the review decision, so the service
+// auto-approves the draft once the gate finishes processing.
 // Rate-limited and SSRF-guarded (normalizeUrl + mp.weixin.qq.com/s allowlist),
-// deduplicated via state.seen, and gated by the same score threshold.
+// deduplicated via state.seen.
 const WECHAT_LINK_RATE = new Map<string, number[]>()
 function allowWechatLink(ip: string): boolean {
   const now = Date.now()
@@ -44,7 +46,14 @@ workbenchRoutes.post('/api/workbench/wechat-import', async (ctx: Context) => {
     const sourceName = typeof body?.sourceName === 'string' ? body.sourceName : undefined
     const result = await importWechatArticleLink(rawUrl, sourceName)
     ctx.status = 201
-    ctx.body = { draftId: result.draftId, title: result.title, url: result.url }
+    ctx.body = {
+      draftId: result.draftId,
+      title: result.title,
+      url: result.url,
+      approved: result.approved,
+      publishedPath: result.publishedPath,
+      note: result.note,
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const isBadRequest =
