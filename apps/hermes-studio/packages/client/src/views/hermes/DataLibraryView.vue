@@ -139,8 +139,9 @@ function isKbEntry(node: Record<string, unknown>): 'paper' | 'article' | null {
 
 function isWikiEdge(edge: Record<string, unknown>): boolean {
   const kind = text(edge.kind, 'wikilink').toLowerCase()
-  // 关键词相似边（keyword_graph 检索模式下文章/论文之间的主要连接）也是图谱连线
-  if (kind !== 'wikilink' && kind !== 'keyword_similarity') return false
+  // 关键词相似边（keyword_graph 检索模式下文章/论文之间的主要连接）与
+  // LLM 语义关系边（离线增强标注）也是图谱连线
+  if (kind !== 'wikilink' && kind !== 'keyword_similarity' && kind !== 'llm_relation') return false
   // 排除只与系统页（index/overview/log/query/purpose）相连的入口链接，
   // 否则文章会“孤零零”只剩一条来自 index 的边
   const s = text(edge.source).toLowerCase()

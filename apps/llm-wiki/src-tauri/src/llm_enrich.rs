@@ -32,6 +32,8 @@ pub const MAX_PAGES_PER_JOB: usize = 120;
 const MAX_RELATION_PAIRS: usize = 160;
 /// 关系标注阶段每次批量送入模型的文章对数量。
 const RELATION_BATCH: usize = 8;
+/// 发布前增强（generated 草稿）最多为新增页面标注关系的文章对数量。
+const MAX_PENDING_RELATION_PAIRS: usize = 12;
 /// 重排阶段送入模型的候选摘要长度上限（字符）。
 const RERANK_SNIPPET_CHARS: usize = 320;
 
@@ -172,7 +174,8 @@ impl EnrichJobStatus {
 }
 
 /// 收集到的待增强页面（内存中间结构）。
-struct CollectedPage {
+#[derive(Debug, Clone)]
+pub(crate) struct CollectedPage {
     id: String,
     title: String,
     node_type: String,
@@ -180,6 +183,31 @@ struct CollectedPage {
     content: String,
     links: Vec<String>,
     hash: String,
+}
+
+impl CollectedPage {
+    /// 从尚未写入 `wiki/` 的提案页面构造待增强页面（发布前增强入口）。
+    /// `id` 必须与页面发布后 [`collect_pages`] 推导出的 ID 一致，
+    /// 这样覆盖层条目才能被 [`crate::api_server::build_graph`] 命中。
+    pub(crate) fn from_proposal(
+        id: String,
+        title: String,
+        node_type: String,
+        content_kind: String,
+        content: String,
+    ) -> Self {
+        let links = extract_wikilink_targets(&content);
+        let hash = content_hash(&content);
+        Self {
+            id,
+            title,
+            node_type,
+            content_kind,
+            content,
+            links,
+            hash,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -319,7 +347,24 @@ pub fn job_status(project_path: &str) -> Value {
 // 启动入口
 // ---------------------------------------------------------------------------
 
-/// 启动一个后台增强任务。同一项目同时只允许一个任务。
+/// 原子地检查并占用项目的增强任务槽位。
+/// 手动整库增强（[`start_enrichment`]）与发布前增强（[`enrich_generated_proposal`]）
+/// 共用槽位与覆盖层文件，必须互斥执行以避免并发写丢失更新。
+fn claim_job_slot(project_path: &str, provider: &str, model: &str) -> Result<(), String> {
+    let key = job_key(project_path);
+    let mut jobs = jobs().lock().map_err(|_| "任务状态锁不可用".to_string())?;
+    if let Some(existing) = jobs.get(&key) {
+        if matches!(existing.phase.as_str(), "pages" | "relations") {
+            return Err("该项目已有增强任务正在运行，请稍后再试".to_string());
+        }
+    }
+    let mut initial = EnrichJobStatus::new(provider, model);
+    initial.phase = "pages".to_string();
+    jobs.insert(key, initial);
+    Ok(())
+}
+
+/// 启动一个后台整库增强任务。同一项目同时只允许一个任务。
 pub fn start_enrichment(
     project_id: String,
     project_path: String,
@@ -332,21 +377,8 @@ pub fn start_enrichment(
                 .to_string(),
         );
     }
-    let key = job_key(&project_path);
-    {
-        let jobs = jobs().lock().map_err(|_| "任务状态锁不可用".to_string())?;
-        if let Some(existing) = jobs.get(&key) {
-            if matches!(existing.phase.as_str(), "pages" | "relations") {
-                return Err("该项目已有增强任务正在运行，请稍后再试".to_string());
-            }
-        }
-    }
-    let mut initial = EnrichJobStatus::new(&llm.provider, &llm.model);
-    initial.phase = "pages".to_string();
     clear_cancel(&project_path);
-    if let Ok(mut jobs) = jobs().lock() {
-        jobs.insert(key, initial);
-    }
+    claim_job_slot(&project_path, &llm.provider, &llm.model)?;
     tauri::async_runtime::spawn(run_enrichment_job(
         project_id,
         project_path.clone(),
@@ -480,6 +512,244 @@ async fn run_enrichment_inner(
 }
 
 // ---------------------------------------------------------------------------
+// 发布前增强（generated 草稿：微信导入 / Deep Research / Web Clipper）
+// ---------------------------------------------------------------------------
+
+/// 为即将入库的 generated 草稿页面做发布前语义增强。
+///
+/// 在草稿进入 `awaiting_review`（可被批准入库）之前调用，保证
+/// “未走完离线流程的内容不会进入可信知识库”：
+/// * 阶段 A：对提案页面做语义摘要 / 主题分类 / 领域标签 / 关键词 / 实体抽取；
+/// * 阶段 B：与库内已发布页面按 TF-IDF 近邻 + 显式 wikilink 生成候选对，
+///   由 LLM 标注文章间关系短语（只保留对手页已有有效摘要的对）。
+///
+/// 结果写入覆盖层；提案页面原样发布后内容哈希一致，知识图谱与检索
+/// 立即可用。与手动整库增强共用任务槽位与进度接口（/enrich/status）。
+///
+/// 返回 `Err` 时调用方必须让草稿失败——不允许跳过富化直接入库。
+pub async fn enrich_generated_proposal(
+    project_path: &str,
+    page: CollectedPage,
+    llm: &LlmConfig,
+) -> Result<(), String> {
+    if !llm.is_usable_for_backend_http() {
+        return Err(
+            "LLM 未配置或不可用：需要配置 provider/model/apiKey（或环境变量 LLM_WIKI_LLM_*）"
+                .to_string(),
+        );
+    }
+    claim_job_slot(project_path, &llm.provider, &llm.model)?;
+    clear_cancel(project_path);
+    let result = enrich_generated_proposal_inner(project_path, &page, llm).await;
+    let was_cancelled = cancelled(project_path);
+    clear_cancel(project_path);
+    match &result {
+        Ok(()) => {
+            update_job(project_path, |job| {
+                job.phase = if was_cancelled {
+                    "cancelled".to_string()
+                } else {
+                    "done".to_string()
+                };
+                job.current.clear();
+                job.finished_at = Some(now_millis());
+            });
+        }
+        Err(error) => {
+            update_job(project_path, |job| {
+                job.phase = "failed".to_string();
+                job.current.clear();
+                job.finished_at = Some(now_millis());
+                job.last_error = Some(truncate_str(error, 300));
+            });
+        }
+    }
+    result
+}
+
+async fn enrich_generated_proposal_inner(
+    project_path: &str,
+    page: &CollectedPage,
+    llm: &LlmConfig,
+) -> Result<(), String> {
+    let client = LlmClient::new(llm.clone())?;
+    let mut overlay = load_overlay(project_path).unwrap_or_default();
+    overlay.provider = llm.provider.clone();
+    overlay.model = llm.model.clone();
+
+    // 阶段 A：单页语义摘要 / 主题 / 标签 / 实体。内容未变的重试直接复用已有结果。
+    let needs_enrich = overlay
+        .pages
+        .get(&page.id)
+        .map(|entry| entry.content_hash != page.hash)
+        .unwrap_or(true);
+    if needs_enrich {
+        if cancelled(project_path) {
+            return Err("增强任务已取消".to_string());
+        }
+        update_job(project_path, |job| {
+            job.phase = "pages".to_string();
+            job.total = 1;
+            job.done = 0;
+            job.current = page.id.clone();
+        });
+        let mut enriched = enrich_single_page(&client, page).await?;
+        enriched.content_hash = page.hash.clone();
+        overlay.pages.insert(page.id.clone(), enriched);
+        overlay.updated_at = now_millis();
+        save_overlay(project_path, &overlay)?;
+        update_job(project_path, |job| {
+            job.done = 1;
+        });
+    }
+
+    if cancelled(project_path) {
+        return Err("增强任务已取消".to_string());
+    }
+
+    // 阶段 B：与库内已发布页面的关系标注。
+    let published = collect_pages(project_path)?;
+    let pairs = pending_relation_pairs(&published, page, &overlay.pages);
+    if !pairs.is_empty() {
+        update_job(project_path, |job| {
+            job.phase = "relations".to_string();
+            job.total = pairs.len();
+            job.done = 0;
+            job.current.clear();
+        });
+        let relations = label_pending_relations(project_path, &client, &pairs, &overlay.pages).await?;
+        merge_pending_relations(&mut overlay, &page.id, relations);
+    }
+
+    overlay.updated_at = now_millis();
+    save_overlay(project_path, &overlay)
+}
+
+/// 为新增页面挑选关系标注候选对：显式 wikilink + 内容 TF-IDF 近邻。
+/// 只保留“覆盖层里已有有效摘要”的对手页，保证关系提示词有足够上下文。
+fn pending_relation_pairs<'a>(
+    published: &'a [CollectedPage],
+    pending: &'a CollectedPage,
+    overlay_pages: &BTreeMap<String, EnrichedPage>,
+) -> Vec<PairRef<'a>> {
+    let usable: BTreeSet<&str> = published
+        .iter()
+        .filter(|page| {
+            overlay_pages
+                .get(&page.id)
+                .map(|entry| entry.content_hash == page.hash && !entry.summary.is_empty())
+                .unwrap_or(false)
+        })
+        .map(|page| page.id.as_str())
+        .collect();
+    let mut ordered: Vec<PairRef<'a>> = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    // 1) 显式 wikilink（解析到本库页面 ID）。
+    let id_set: BTreeSet<&str> = published.iter().map(|page| page.id.as_str()).collect();
+    for raw in &pending.links {
+        if let Some(target) = resolve_link_target(raw, &id_set) {
+            if usable.contains(target) {
+                push_pair(&mut ordered, &mut seen, pending.id.as_str(), target);
+            }
+        }
+    }
+
+    // 2) 内容 TF-IDF 近邻：pending 排在最后，仅保留与它成对的高分候选。
+    let mut all_refs: Vec<&CollectedPage> = published.iter().collect();
+    all_refs.push(pending);
+    let pending_index = all_refs.len() - 1;
+    let mut scored: Vec<(f64, &'a str, &'a str)> = similar_pairs(&all_refs, 3, usize::MAX)
+        .into_iter()
+        .filter_map(|(left, right, score)| {
+            if right == pending_index {
+                Some((score, all_refs[left].id.as_str(), pending.id.as_str()))
+            } else if left == pending_index {
+                Some((score, pending.id.as_str(), all_refs[right].id.as_str()))
+            } else {
+                None
+            }
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.total_cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    for (_, left, right) in scored {
+        // left 恒为 pending 或对手页；对手页必须有可用摘要。
+        let (pending_id, target) = if left == pending.id.as_str() {
+            (left, right)
+        } else {
+            (right, left)
+        };
+        if usable.contains(target) {
+            push_pair(&mut ordered, &mut seen, pending_id, target);
+        }
+        if ordered.len() >= MAX_PENDING_RELATION_PAIRS {
+            break;
+        }
+    }
+    ordered
+}
+
+/// 对已选定的候选对批量标注关系；任一批次失败即整体失败（由调用方重试）。
+async fn label_pending_relations(
+    project_path: &str,
+    client: &LlmClient,
+    pairs: &[PairRef<'_>],
+    overlay_pages: &BTreeMap<String, EnrichedPage>,
+) -> Result<Vec<EnrichedRelation>, String> {
+    let mut relations = Vec::new();
+    let mut processed = 0usize;
+    for batch in pairs.chunks(RELATION_BATCH) {
+        if cancelled(project_path) {
+            return Err("增强任务已取消".to_string());
+        }
+        let user = build_relation_prompt(batch, overlay_pages);
+        match llm_json_array(client, RELATION_SYSTEM_PROMPT, &user).await {
+            Ok(items) => {
+                for item in items {
+                    if let Some(relation) = parse_relation_verdict(item, batch) {
+                        relations.push(relation);
+                    }
+                }
+            }
+            Err(error) => return Err(format!("关系标注失败: {error}")),
+        }
+        processed += batch.len();
+        update_relation_progress(project_path, pairs.len(), processed);
+    }
+    Ok(relations)
+}
+
+/// 把发布前标注的关系合并进覆盖层：替换与该页面相关的旧条目，
+/// 保留其他页面间已有关系，按无序对去重。
+fn merge_pending_relations(
+    overlay: &mut EnrichmentOverlay,
+    page_id: &str,
+    relations: Vec<EnrichedRelation>,
+) {
+    overlay
+        .relations
+        .retain(|relation| relation.source != page_id && relation.target != page_id);
+    let mut seen: BTreeSet<String> = overlay
+        .relations
+        .iter()
+        .map(|relation| unordered_pair_key(&relation.source, &relation.target))
+        .collect();
+    for relation in relations {
+        if seen.insert(unordered_pair_key(&relation.source, &relation.target)) {
+            overlay.relations.push(relation);
+        }
+    }
+}
+
+fn unordered_pair_key(left: &str, right: &str) -> String {
+    if left < right {
+        format!("{left}::{right}")
+    } else {
+        format!("{right}::{left}")
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 页面收集
 // ---------------------------------------------------------------------------
 
@@ -557,7 +827,7 @@ fn first_heading(content: &str) -> Option<String> {
         .map(|title| title.trim().to_string())
 }
 
-fn extract_frontmatter_value(content: &str, key: &str) -> Option<String> {
+pub(crate) fn extract_frontmatter_value(content: &str, key: &str) -> Option<String> {
     let rest = content
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))?;
@@ -787,7 +1057,8 @@ fn candidate_pairs<'a>(usable: &[&'a CollectedPage], all: &'a [CollectedPage]) -
     }
 
     // 2) 内容 TF-IDF 余弦相似度最高的近邻对。
-    for (left, right, _score) in similar_pairs(all, 3, MAX_RELATION_PAIRS) {
+    let all_refs: Vec<&CollectedPage> = all.iter().collect();
+    for (left, right, _score) in similar_pairs(&all_refs, 3, MAX_RELATION_PAIRS) {
         push_pair(
             &mut ordered,
             &mut seen,
@@ -837,7 +1108,7 @@ fn resolve_link_target<'a, 'ids>(raw: &str, ids: &'ids BTreeSet<&'a str>) -> Opt
 }
 
 /// 返回按相似度降序排列的文档索引对（每篇最多 top_per_doc 个邻居，全局上限 cap）。
-fn similar_pairs(pages: &[CollectedPage], top_per_doc: usize, cap: usize) -> Vec<(usize, usize, f64)> {
+fn similar_pairs(pages: &[&CollectedPage], top_per_doc: usize, cap: usize) -> Vec<(usize, usize, f64)> {
     let counts: Vec<BTreeMap<String, f64>> = pages
         .iter()
         .map(|page| term_counts(&format!("{} {}", page.title, page.content)))
@@ -1331,6 +1602,94 @@ mod tests {
         assert!(is_aggregate_page("index"));
         assert!(is_aggregate_page("sources/index"));
         assert!(!is_aggregate_page("papers/my-paper"));
+    }
+
+    #[test]
+    fn pending_relation_pairs_only_keep_usable_counterparts() {
+        // beta 有与当前内容哈希一致的摘要 => 可参与关系标注；
+        // gamma 没有覆盖层条目、delta 摘要已过期 => 都应被排除。
+        let mut beta = page("beta", "Beta Paper", "kafka streaming latency benchmark flink throughput");
+        beta.links.clear();
+        let gamma = page("gamma", "Gamma Paper", "vector database ann index recall");
+        let delta = page("delta", "Delta Paper", "kafka streaming latency benchmark flink throughput");
+        let pending = CollectedPage::from_proposal(
+            "sources/new-article".to_string(),
+            "New Article".to_string(),
+            "source".to_string(),
+            "technical_article".to_string(),
+            "kafka streaming latency benchmark flink throughput".to_string(),
+        );
+        let published = vec![beta.clone(), gamma, delta];
+
+        let mut overlay_pages = BTreeMap::new();
+        overlay_pages.insert(
+            "beta".to_string(),
+            EnrichedPage {
+                summary: "beta 摘要".to_string(),
+                content_hash: published[0].hash.clone(),
+                ..Default::default()
+            },
+        );
+        // delta 的摘要对应旧内容，属于陈旧条目。
+        overlay_pages.insert(
+            "delta".to_string(),
+            EnrichedPage {
+                summary: "delta 摘要".to_string(),
+                content_hash: "stale-hash".to_string(),
+                ..Default::default()
+            },
+        );
+
+        let pairs = pending_relation_pairs(&published, &pending, &overlay_pages);
+        assert!(pairs.contains(&("sources/new-article", "beta")), "{pairs:?}");
+        assert!(pairs.iter().all(|pair| pair.1 != "gamma" && pair.1 != "delta"));
+        assert!(pairs.len() <= MAX_PENDING_RELATION_PAIRS);
+    }
+
+    #[test]
+    fn merge_pending_relations_replaces_only_pending_pairs() {
+        let mut overlay = EnrichmentOverlay::default();
+        overlay.relations.push(EnrichedRelation {
+            source: "pending".to_string(),
+            target: "old".to_string(),
+            relation: "旧关系".to_string(),
+            evidence: String::new(),
+        });
+        overlay.relations.push(EnrichedRelation {
+            source: "a".to_string(),
+            target: "b".to_string(),
+            relation: "提供评测基准".to_string(),
+            evidence: String::new(),
+        });
+        merge_pending_relations(
+            &mut overlay,
+            "pending",
+            vec![
+                EnrichedRelation {
+                    source: "pending".to_string(),
+                    target: "a".to_string(),
+                    relation: "引用其损失函数".to_string(),
+                    evidence: "依据".to_string(),
+                },
+                // 与已有 a::b 重复（无序对），应被丢弃。
+                EnrichedRelation {
+                    source: "b".to_string(),
+                    target: "a".to_string(),
+                    relation: "重复关系".to_string(),
+                    evidence: String::new(),
+                },
+            ],
+        );
+        assert_eq!(overlay.relations.len(), 2);
+        assert!(!overlay.relation_for("pending", "old").is_some());
+        assert_eq!(
+            overlay.relation_for("pending", "a").unwrap().relation,
+            "引用其损失函数"
+        );
+        assert_eq!(
+            overlay.relation_for("a", "b").unwrap().relation,
+            "提供评测基准"
+        );
     }
 
     #[test]

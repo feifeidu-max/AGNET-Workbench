@@ -212,10 +212,11 @@ const awaitingDrafts = computed(() => drafts.value.filter(draft => draft.status 
 const dirtyFile = computed(() => activeFileContent.value !== savedFileContent.value)
 const wikiTree = computed(() => toTreeNodes(wikiFiles.value))
 const sourceTree = computed(() => toTreeNodes(sourceFiles.value))
-// 关键词相似边（keyword_graph 模式下文章/论文间的主要连线）也纳入图谱展示
+// 关键词相似边（keyword_graph 模式下文章/论文间的主要连线）与 LLM 语义关系边
+// （离线增强标注的文章间关系）都纳入图谱展示
 function isExplicitGraphEdge(edge: Record<string, unknown>): boolean {
   const kind = String(edge.kind ?? '').toLowerCase()
-  return kind === 'wikilink' || kind === 'keyword_similarity'
+  return kind === 'wikilink' || kind === 'keyword_similarity' || kind === 'llm_relation'
 }
 const filteredGraphNodes = computed(() => {
   const eligible = graphPaperOnly.value

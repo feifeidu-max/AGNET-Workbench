@@ -3409,6 +3409,23 @@ fn llm_config_from_environment() -> Option<agent::provider::LlmConfig> {
     llm_config_from_environment_values(|key| std::env::var(key).ok())
 }
 
+/// 最近一次从应用内设置解析出的 LLM 配置缓存。发布前语义增强运行在
+/// ingest 队列线程里（没有 AppHandle），环境变量不可用时回退到这里。
+static CACHED_STORE_LLM_CONFIG: OnceLock<Mutex<Option<agent::provider::LlmConfig>>> =
+    OnceLock::new();
+
+/// ingest 队列等无 AppHandle 上下文可用的后台 LLM 配置：
+/// 环境变量优先（headless 交付形态），其次应用内设置的最近一次缓存。
+pub(crate) fn backend_llm_config() -> Option<agent::provider::LlmConfig> {
+    llm_config_from_environment().or_else(|| {
+        CACHED_STORE_LLM_CONFIG
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+    })
+}
+
 #[derive(Debug, Clone, Default)]
 struct AgentRuntimeConfig {
     embedding: Option<commands::search::SearchEmbeddingConfig>,
@@ -3428,13 +3445,24 @@ fn load_agent_runtime_config(app: &AppHandle) -> AgentRuntimeConfig {
         // A Studio-managed headless service cannot depend on an old Wiki
         // window for first-run setup. Environment configuration takes
         // precedence so the API key remains outside app-state and Git.
-        llm: llm_config_from_environment().or_else(|| {
-            parsed
-                .as_ref()
-                .and_then(|value| value.get("llmConfig"))
-                .cloned()
-                .and_then(|value| serde_json::from_value(value).ok())
-        }),
+        llm: {
+            let resolved = llm_config_from_environment().or_else(|| {
+                parsed
+                    .as_ref()
+                    .and_then(|value| value.get("llmConfig"))
+                    .cloned()
+                    .and_then(|value| serde_json::from_value(value).ok())
+            });
+            if let Some(config) = &resolved {
+                if let Ok(mut guard) = CACHED_STORE_LLM_CONFIG
+                    .get_or_init(|| Mutex::new(None))
+                    .lock()
+                {
+                    *guard = Some(config.clone());
+                }
+            }
+            resolved
+        },
         web_search: parsed
             .as_ref()
             .and_then(|value| value.get("searchApiConfig"))
@@ -3801,6 +3829,47 @@ fn build_graph(project_path: &str) -> Result<(Vec<ApiGraphNode>, Vec<ApiGraphEdg
     }
 
     add_keyword_similarity_edges(&raw, overlay.as_ref(), &mut link_count, &mut seen, &mut edges);
+
+    // LLM 语义增强产生的文章间关系：即使两页之间没有 wikilink、关键词相似度
+    // 低于阈值，只要两端页面内容未变化（覆盖层条目新鲜），也作为独立边展示。
+    if let Some(overlay) = overlay.as_ref() {
+        for relation in &overlay.relations {
+            let Some(source_page) = raw.get(&relation.source) else {
+                continue;
+            };
+            let Some(target_page) = raw.get(&relation.target) else {
+                continue;
+            };
+            if !source_page.enriched || !target_page.enriched {
+                continue;
+            }
+            if source_page.node_type == "query" || target_page.node_type == "query" {
+                continue;
+            }
+            let source = relation.source.clone();
+            let target = relation.target.clone();
+            let key = if source < target {
+                format!("{source}::{target}")
+            } else {
+                format!("{target}::{source}")
+            };
+            if !seen.insert(key) {
+                continue;
+            }
+            *link_count.entry(source.clone()).or_default() += 1;
+            *link_count.entry(target.clone()).or_default() += 1;
+            edges.push(ApiGraphEdge {
+                source,
+                target,
+                weight: 1.0,
+                kind: "llm_relation".to_string(),
+                relation: relation.relation.clone(),
+                relation_source: "llm".to_string(),
+                evidence: relation.evidence.clone(),
+                shared_terms: Vec::new(),
+            });
+        }
+    }
 
     let nodes = raw
         .into_iter()
@@ -4555,6 +4624,74 @@ mod tests {
         assert!(edges.iter().any(|edge| edge.source == "sources/streaming"
             && edge.target == "sources/storage"
             && edge.relation == "工程依赖"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn graph_adds_llm_overlay_relation_edges_without_wikilinks() {
+        // 两页不带 frontmatter（node_type/content_kind 为空 => 不参与关键词
+        // 相似度）、内容互不关联且没有 wikilink：唯一的边只能来自覆盖层里的
+        // LLM 关系。
+        let root = test_project_dir();
+        let sources = root.join("wiki/sources");
+        fs::create_dir_all(&sources).unwrap();
+        let award_content = "# Award ceremony report\n\nStaff members won a provincial skill competition award ceremony.";
+        let river_content = "# River hydrology survey\n\nA hydrology survey measures rainfall across river basins.";
+        fs::write(sources.join("award.md"), award_content).unwrap();
+        fs::write(sources.join("river.md"), river_content).unwrap();
+
+        let overlay_page = |summary: &str, content: &str| {
+            json!({
+                "summary": summary,
+                "topics": [],
+                "tags": [],
+                "keywords": [],
+                "entities": [],
+                "contentHash": crate::llm_enrich::content_hash(content),
+            })
+        };
+        let overlay = json!({
+            "version": 1,
+            "provider": "test",
+            "model": "test-model",
+            "updatedAt": 1,
+            "pages": {
+                "sources/award": overlay_page("获奖新闻", award_content),
+                "sources/river": overlay_page("水文调查", river_content),
+            },
+            "relations": [
+                {
+                    "source": "sources/award",
+                    "target": "sources/river",
+                    "relation": "同一单位",
+                    "evidence": "两页均指向同一检测院"
+                }
+            ]
+        });
+        fs::create_dir_all(root.join(".llm-wiki")).unwrap();
+        fs::write(
+            root.join(".llm-wiki").join("llm-enrichment.json"),
+            serde_json::to_vec_pretty(&overlay).unwrap(),
+        )
+        .unwrap();
+
+        let (nodes, edges) = build_graph(root.to_string_lossy().as_ref()).unwrap();
+        assert!(
+            nodes.iter().filter(|node| node.node_type != "query").all(|node| node.enriched),
+            "fresh overlay entries should mark nodes enriched"
+        );
+        assert!(
+            !edges.iter().any(|edge| edge.kind == "keyword_similarity"),
+            "dissimilar pages must not produce similarity edges"
+        );
+        let llm_edges: Vec<_> = edges
+            .iter()
+            .filter(|edge| edge.kind == "llm_relation")
+            .collect();
+        assert_eq!(llm_edges.len(), 1, "overlay relation should become an edge");
+        assert_eq!(llm_edges[0].relation, "同一单位");
+        assert_eq!(llm_edges[0].relation_source, "llm");
+        assert_eq!(llm_edges[0].evidence, "两页均指向同一检测院");
         let _ = fs::remove_dir_all(root);
     }
 

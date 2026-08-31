@@ -727,10 +727,10 @@ onUnmounted(() => {
                   </NCollapseItem>
                   <NCollapseItem title="微信控制知识库 · 免 LLM Wiki 手动导入" name="kb">
                     <div class="help-block">
-                      <p><b>导入公众号文章：</b> 在微信里发送 <code>https://mp.weixin.qq.com/s/... 帮我导入</code>，Hermes 会自动抓取正文（双 UA + 12 MB 上限 + 去重）并创建草稿 <code>draftId</code>；回复 <code>批准 / 直接入库</code> 即可写入 <code>wiki/sources/*.md</code>，无需打开 LLM Wiki。</p>
+                      <p><b>导入公众号文章：</b> 在微信里发送 <code>https://mp.weixin.qq.com/s/... 帮我导入</code>，Hermes 会自动抓取正文（双 UA + 12 MB 上限 + 去重）并创建草稿 <code>draftId</code>；后台先执行离线语义增强（摘要/主题/实体/关系，约 1-2 分钟），完成后回复 <code>批准 / 直接入库</code> 即可写入 <code>wiki/sources/*.md</code>，无需打开 LLM Wiki。</p>
                       <p><b>关键词检索：</b> 发送 <code>知识库里关于 数据湖 的文章有哪些？</code> 或 <code>帮我总结 湖仓 相关论文</code>，Hermes 会调用 <code>GET /api/knowledge/search</code> / <code>POST /api/knowledge/chat</code> 并带标题/路径/摘要引用回答。</p>
                       <p><b>管理：</b> <code>列一下待审核草稿</code> / <code>知识库概览</code> / <code>删除 wiki/sources/xxx.md</code> 均可通过语言直接完成。</p>
-                      <p style="color:var(--warning);">提示：导入后需“批准”才会变为可信知识并被检索/图谱收录；限流 6 次/分，重复链接会提示“已导入过”。</p>
+                      <p style="color:var(--warning);">提示：导入后需等离线语义增强完成再“批准”，文章才会带着摘要/实体/关系进入知识图谱；批准时若提示“正在离线语义处理”，约 1 分钟后重新发送“批准”即可。限流 6 次/分，重复链接会提示“已导入过”。</p>
                     </div>
                   </NCollapseItem>
                 </NCollapse>
@@ -744,7 +744,7 @@ onUnmounted(() => {
               <li><b>启动 Gateway</b>：确保上侧 Gateway 显示为“运行中”（若未运行，点“启动”；需关闭时点“停止”。<code>自动启动</code> 开启后 Studio 启动时自动拉起）。</li>
               <li><b>绑定微信</b>：点“扫码登录微信”，用手机微信扫码并在手机上确认；也可在下方手动粘贴 Token/AccountID 保存并自动重启 Gateway。</li>
               <li><b>在微信中说话</b>：对已绑定的微信账号发送消息，Hermes 将通过 Gateway 回复；可在“频道”中配置白名单与回复策略。</li>
-              <li><b>用微信控制知识库（免手动导入）</b>：在微信里直接发 <code>https://mp.weixin.qq.com/s/...</code> 链接并说“帮我导入”，Hermes 会自动抓取并创建草稿；回复“批准/直接入库”即可无需打开 LLM Wiki 完成入库。发关键词如“知识库里关于 数据治理 的文章有哪些？”即可让 Hermes 检索并引用已入库论文/文章。</li>
+              <li><b>用微信控制知识库（免手动导入）</b>：在微信里直接发 <code>https://mp.weixin.qq.com/s/...</code> 链接并说“帮我导入”，Hermes 会自动抓取并创建草稿，后台完成离线语义增强后回复“批准/直接入库”即可无需打开 LLM Wiki 完成入库（文章自动带摘要/实体/关系进入知识图谱）。发关键词如“知识库里关于 数据治理 的文章有哪些？”即可让 Hermes 检索并引用已入库论文/文章。</li>
             </ol>
           </div>
           <div class="gw-steps" style="margin-top:12px; background: var(--bg-secondary); border-style: dashed;">

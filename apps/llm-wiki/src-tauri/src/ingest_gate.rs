@@ -116,6 +116,10 @@ pub struct IngestDraft {
     pub published_pages: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub embedding_status: Option<String>,
+    /// 发布前离线语义增强结果：completed | skipped_no_llm。
+    /// 缺省（None）表示尚未执行或来自旧版本草稿。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enrichment_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,6 +260,12 @@ fn default_source_kind() -> String {
 
 fn native_compile_enabled() -> bool {
     std::env::var("LLM_WIKI_NATIVE_COMPILE").as_deref() == Ok("1")
+}
+
+/// 发布前语义增强的显式开关。默认开启；`LLM_WIKI_INGEST_ENRICHMENT=0`
+/// 时跳过增强直接进入审核（无图谱语义关系的降级形态，也用于单元测试）。
+fn ingest_enrichment_enabled() -> bool {
+    std::env::var("LLM_WIKI_INGEST_ENRICHMENT").as_deref() != Ok("0")
 }
 
 fn gate_lock() -> Result<std::sync::MutexGuard<'static, ()>, GateError> {
@@ -518,6 +528,7 @@ fn create_source_draft(
         source_path: None,
         published_pages: Vec::new(),
         embedding_status: None,
+        enrichment_status: None,
     };
     let directory = draft_dir(project_path, &draft.id)?;
     fs::create_dir_all(&directory)
@@ -623,6 +634,7 @@ pub(crate) fn create_generated_page_draft(
         source_path: None,
         published_pages: Vec::new(),
         embedding_status: None,
+        enrichment_status: None,
     };
     let directory = draft_dir(project_path, &draft.id)?;
     fs::create_dir_all(&directory)
@@ -655,6 +667,37 @@ pub fn list_drafts(project_path: &str) -> Result<Vec<IngestDraft>, GateError> {
 /// can leave generated proposals in `uploaded` while no new request arrives
 /// to kick the worker.
 pub fn resume_queued_drafts(project_path: String) {
+    // 发布前语义增强让 generated 草稿会在 parsing/drafting 停留一段时间。
+    // 进程重启后不可能还有存活的 worker，这里无条件把它们放回队列重新处理，
+    // 否则这些草稿会永远阻塞单 worker 队列。
+    let recovered = (|| -> Result<usize, GateError> {
+        let _guard = gate_lock()?;
+        let mut recovered = 0;
+        for mut draft in list_drafts_unlocked(&project_path)? {
+            if draft.source_kind == "generated"
+                && matches!(
+                    draft.status,
+                    DraftStatus::Parsing | DraftStatus::Drafting
+                )
+            {
+                draft.status = DraftStatus::Uploaded;
+                draft.updated_at = now();
+                write_draft(&project_path, &draft)?;
+                recovered += 1;
+            }
+        }
+        Ok(recovered)
+    })();
+    match recovered {
+        Ok(count) if count > 0 => eprintln!(
+            "[ingest-gate] resumed {count} interrupted generated draft(s) after restart"
+        ),
+        Ok(_) => {}
+        Err(error) => eprintln!(
+            "[ingest-gate] failed to resume interrupted drafts: {}",
+            error.message
+        ),
+    }
     if !project_path.trim().is_empty() {
         kick_queue(project_path);
     }
@@ -1066,7 +1109,16 @@ pub fn approve_draft(project_path: &str, draft_id: &str) -> Result<IngestDraft, 
     let _guard = gate_lock()?;
     let mut draft = read_draft(project_path, draft_id)?;
     if draft.status != DraftStatus::AwaitingReview {
-        return Err(GateError::new(409, "Draft is not awaiting review"));
+        return Err(GateError::new(
+            409,
+            match draft.status {
+                // 发布前语义增强正在执行；批准必须等离线流程走完。
+                DraftStatus::Parsing | DraftStatus::Drafting => {
+                    "草稿正在离线语义处理（摘要/主题/实体/关系抽取），完成后才能批准入库，请稍候约 1 分钟再试"
+                }
+                _ => "Draft is not awaiting review",
+            },
+        ));
     }
     let proposal_path = draft_dir(project_path, draft_id)?.join(PROPOSAL_FILE);
     let proposal_raw = fs::read(&proposal_path)
@@ -1160,6 +1212,47 @@ fn process_draft(project_path: String, draft_id: String) {
                 serde_json::from_slice(&proposal_raw).map_err(|error| {
                     GateError::internal(format!("Generated proposal is invalid: {error}"))
                 })?;
+            let change = proposal
+                .changes
+                .first()
+                .cloned()
+                .ok_or_else(|| GateError::new(409, "Generated proposal has no changes"))?;
+
+            {
+                let _guard = gate_lock()?;
+                let mut draft = read_draft(&project_path, &draft_id)?;
+                if draft.status == DraftStatus::Rejected {
+                    return Ok(());
+                }
+                draft.status = DraftStatus::Drafting;
+                draft.draft_mode = "generated_semantic_enrichment".to_string();
+                draft.error = None;
+                draft.updated_at = now();
+                write_draft(&project_path, &draft)?;
+            }
+
+            // 发布前必须走完离线语义增强（摘要/主题/标签/实体抽取 + 与库内
+            // 文章的关系标注），否则发布后的页面无法参与知识图谱。增强失败时
+            // 草稿进入 failed，绝不跳过该步骤直接进入审核。
+            let enrichment_status = if !ingest_enrichment_enabled() {
+                eprintln!(
+                    "[ingest-gate] generated draft {draft_id}: LLM_WIKI_INGEST_ENRICHMENT=0，跳过发布前语义增强"
+                );
+                "disabled".to_string()
+            } else {
+                match crate::api_server::backend_llm_config() {
+                    Some(config) => {
+                        run_generated_enrichment(&project_path, &draft_id, change, &config)?
+                    }
+                    None => {
+                        eprintln!(
+                            "[ingest-gate] generated draft {draft_id}: LLM 未配置，跳过发布前语义增强"
+                        );
+                        "skipped_no_llm".to_string()
+                    }
+                }
+            };
+
             let _guard = gate_lock()?;
             let mut draft = read_draft(&project_path, &draft_id)?;
             if draft.status == DraftStatus::Rejected {
@@ -1167,6 +1260,7 @@ fn process_draft(project_path: String, draft_id: String) {
             }
             draft.status = DraftStatus::AwaitingReview;
             draft.proposed_change_count = proposal.changes.len();
+            draft.enrichment_status = Some(enrichment_status);
             draft.error = None;
             draft.updated_at = now();
             return write_draft(&project_path, &draft);
@@ -1243,6 +1337,77 @@ fn process_draft(project_path: String, draft_id: String) {
         // promoted from `uploaded` to `awaiting_review`.
         kick_queue(project_path);
     }
+}
+
+/// 对 generated 提案执行发布前语义增强，返回草稿应记录的 enrichment_status。
+///
+/// 手动整库增强正在运行时最多等待约 5 分钟再占用任务槽位；LLM 瞬时失败
+/// 自动重试一次（阶段 A 按内容哈希幂等，重试只补齐失败的步骤）。
+fn run_generated_enrichment(
+    project_path: &str,
+    draft_id: &str,
+    change: ProposedChange,
+    config: &crate::agent::provider::LlmConfig,
+) -> Result<String, GateError> {
+    let page_id = change
+        .path
+        .trim_start_matches("wiki/")
+        .trim_end_matches(".md")
+        .to_string();
+    let node_type = crate::llm_enrich::extract_frontmatter_value(&change.content, "type")
+        .unwrap_or_else(|| "other".to_string())
+        .to_lowercase();
+    let content_kind = match node_type.as_str() {
+        "paper" => "paper".to_string(),
+        "source" => "technical_article".to_string(),
+        _ => String::new(),
+    };
+    let page = crate::llm_enrich::CollectedPage::from_proposal(
+        page_id,
+        change.title,
+        node_type,
+        content_kind,
+        change.content,
+    );
+
+    const BUSY_MARKER: &str = "已有增强任务正在运行";
+    const CANCEL_MARKER: &str = "增强任务已取消";
+    let mut busy_waits = 0u32;
+    let result = loop {
+        let attempt = tauri::async_runtime::block_on(crate::llm_enrich::enrich_generated_proposal(
+            project_path,
+            page.clone(),
+            config,
+        ));
+        match attempt {
+            Ok(()) => break Ok(()),
+            Err(error) if error.contains(BUSY_MARKER) && busy_waits < 20 => {
+                busy_waits += 1;
+                std::thread::sleep(std::time::Duration::from_secs(15));
+            }
+            Err(error) => break Err(error),
+        }
+    };
+    let result = match result {
+        Ok(()) => Ok(()),
+        Err(error) if !error.contains(CANCEL_MARKER) => {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            tauri::async_runtime::block_on(crate::llm_enrich::enrich_generated_proposal(
+                project_path,
+                page.clone(),
+                config,
+            ))
+            .map_err(|retry_error| format!("{error}；重试仍失败：{retry_error}"))
+        }
+        Err(error) => Err(error),
+    };
+    result.map_err(|error| {
+        eprintln!(
+            "[ingest-gate] generated draft {draft_id} enrichment failed: {error}"
+        );
+        GateError::new(502, format!("离线语义增强失败，草稿未进入审核：{error}"))
+    })?;
+    Ok("completed".to_string())
 }
 
 fn build_proposal(draft: &IngestDraft, extracted: &str) -> DraftProposal {
@@ -2446,6 +2611,7 @@ mod tests {
             source_path: None,
             published_pages: Vec::new(),
             embedding_status: None,
+            enrichment_status: None,
         };
         let directory = draft_dir(project_path, &draft.id).expect("draft directory");
         fs::create_dir_all(&directory).expect("create staging directory");
@@ -2763,6 +2929,9 @@ mod tests {
 
     #[test]
     fn generated_page_stays_staged_until_approval() {
+        // 测试环境可能带有 LLM_WIKI_LLM_* 配置；显式关闭发布前增强，
+        // 保证该测试不发起真实的 LLM 网络调用。
+        std::env::set_var("LLM_WIKI_INGEST_ENRICHMENT", "0");
         let project = std::env::temp_dir().join(format!("llm-wiki-gate-{}", Uuid::new_v4()));
         let project_path = project.to_string_lossy().to_string();
         let target = "wiki/papers/generated-review-test.md";
@@ -2783,19 +2952,27 @@ mod tests {
         assert!(!published_page.exists());
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let awaiting = loop {
-            let current = read_draft(&project_path, &draft.id).expect("draft should exist");
-            if matches!(
-                current.status,
-                DraftStatus::AwaitingReview | DraftStatus::Failed
-            ) {
-                break current;
+            // write_atomic 的 remove+rename 在 Windows 上有瞬时不可读窗口，
+            // 轮询读取允许短暂失败，只关心最终状态。
+            let current = read_draft(&project_path, &draft.id);
+            if let Ok(current) = &current {
+                if matches!(
+                    current.status,
+                    DraftStatus::AwaitingReview | DraftStatus::Failed
+                ) {
+                    break current.clone();
+                }
             }
             if std::time::Instant::now() >= deadline {
-                panic!("generated draft did not reach review: {:?}", current.status);
+                panic!(
+                    "generated draft did not reach review: {:?}",
+                    current.map(|draft| draft.status).unwrap_or(DraftStatus::Uploaded)
+                );
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         };
         assert_eq!(awaiting.status, DraftStatus::AwaitingReview);
+        assert_eq!(awaiting.enrichment_status.as_deref(), Some("disabled"));
         assert!(!published_page.exists());
 
         let trusted = approve_draft(&project_path, &draft.id).expect("approval should publish");

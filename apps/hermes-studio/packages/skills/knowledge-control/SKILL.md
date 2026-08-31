@@ -71,9 +71,11 @@ prerequisites:
    - 400 已导入过 -> 告知去重命中
    - 429 操作过于频繁 -> 告知 6 次/分限流
    - 502 微信返回环境验证页面 -> 提示该号被风控
-4. 向用户确认：已抓取《标题》并创建草稿（ID abcd1234），已进入审核队列。是否立即批准入库？回复“批准”“直接入库”即可，无需打开 LLM Wiki。
-5. 若用户确认批准（或原始指令已含 直接入库 / 立即发布 / 无需审核）：**首选专用工具** `hermes_studio_knowledge_draft_review { action: "approve", draft_id: "abcd1234" }`（等价于 hermes_studio_api_request POST /api/knowledge/drafts/abcd1234/approve）。成功后告知已批准入库 wiki/sources/<slug>.md，现已可被关键词检索。
-6. 用户说「拒绝该文章入库」：`hermes_studio_knowledge_draft_review { action: "reject", draft_id: "abcd1234", reason: "用户拒绝" }`，并回复已拒绝对应草稿。
+4. 向用户确认：已抓取《标题》并创建草稿（ID abcd1234），正在后台执行离线语义增强（摘要/主题/实体抽取 + 与库内文章的关系标注，通常 1-2 分钟）。完成后回复“批准”“直接入库”即可入库，无需打开 LLM Wiki。**不要在导入后立即批准**：增强未完成时草稿处于 processing 状态。
+5. 若用户确认批准（或原始指令已含 直接入库 / 立即发布 / 无需审核）：**首选专用工具** `hermes_studio_knowledge_draft_review { action: "approve", draft_id: "abcd1234" }`（等价于 hermes_studio_api_request POST /api/knowledge/drafts/abcd1234/approve）。
+   - 若返回 409 且提示「草稿正在离线语义处理……」：告知用户文章还在走离线流程，请约 1 分钟后回复“批准”再试；**不要反复重试**，也不要把草稿拒绝。
+   - 成功后告知已批准入库 wiki/sources/<slug>.md，文章已带语义摘要/实体/关系进入知识图谱，并可被关键词检索。
+6. 用户说「拒绝该文章入库」：`hermes_studio_knowledge_draft_review { action: "reject", draft_id: "abcd1234", reason: "用户拒绝" }`，并回复已拒绝对应草稿。若草稿因增强失败进入 failed，也应说明原因并建议用户重发链接重新导入。
 7. 可主动提供 GET /api/knowledge/drafts 列表或 GET /api/knowledge/summary 计数供复核。
 
 ### 2) 关键词回应已入库论文/文章（全量感知）
@@ -113,6 +115,7 @@ Hermes 被授权对知识库做完全读写，所有操作均通过 hermes_studi
 - SSRF 防护：仅 mp.weixin.qq.com/s/ 允许
 - 去重提示：已导入过 时给出已入库标题与 draftId
 - 内容过短（<180 字）或验证页：提示 未提取到足够长的文章正文
+- **离线增强门槛**：微信/生成类草稿必须完成发布前 LLM 语义增强（摘要/主题/实体/关系）才会进入待审核；批准时若 409 提示「草稿正在离线语义处理」，等待约 1 分钟后重新批准即可。增强失败的草稿会标记 failed，拒绝后重新导入可重试。
 - LLM Wiki 未连接：提示 LLM Wiki 未连接，请在 127.0.0.1:19828 打开桌面端并确保设置 -> API -> 启用 MCP 已开启
 
 ---
